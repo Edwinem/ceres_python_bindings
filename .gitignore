@@ -1,0 +1,58 @@
+
+
+#Specific folders:
+x86_64_windows_msvc/*
+x86_64_linux_gnu/*
+bin/*
+build/*
+cmake-build-debug/*
+
+
+# C++ files
+*.a
+*.so
+*.so
+*.o
+
+# python files
+*.pyc
+*.npz
+*.npy
+*.pytest_cache
+*.p
+
+# Editor files
+
+#QT
+*.files
+*.includes
+*.creator
+
+# Visual studio
+*.sln
+*.VC.db
+scripts/\.vs/scripts/v15/\.suo
+\.vs/nl/v15/
+\.vs/
+
+# CLion
+.idea
+.idea/*
+
+
+#Other filetypes
+*.xml
+*.iml
+*.orig
+*.jpg
+*.png
+*.autosave
+*.zip
+*.dir
+*.pyproj
+*.csv
+
+
+
+
+
