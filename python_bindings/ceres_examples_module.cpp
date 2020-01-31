@@ -130,6 +130,27 @@ struct SnavelyReprojectionError {
   double observed_y;
 };
 
+
+
+void SolveBALProblemWithCPP(BALProblem* bal_problem){
+  const double* observations = bal_problem->observations();
+  ceres::Problem problem;
+  for (int i = 0; i < bal_problem->num_observations(); ++i) {
+    ceres::CostFunction* cost_function =
+        SnavelyReprojectionError::Create(observations[2 * i + 0],
+                                         observations[2 * i + 1]);
+    problem.AddResidualBlock(cost_function,
+                             NULL /* squared loss */,
+                             bal_problem->mutable_camera_for_observation(i),
+                             bal_problem->mutable_point_for_observation(i));
+  }
+  ceres::Solver::Options options;
+  options.linear_solver_type = ceres::DENSE_SCHUR;
+  // options.minimizer_progress_to_stdout = true;
+  ceres::Solver::Summary summary;
+  ceres::Solve(options, &problem, &summary);
+}
+
 void add_pybinded_ceres_examples(py::module &m) {
 
   m.def("CreateHelloWorldCostFunction", &CreateHelloWorldCostFunction);
@@ -165,9 +186,9 @@ void add_pybinded_ceres_examples(py::module &m) {
   bal.def("points", [](BALProblem &myself) {
     std::vector<double> double_data;
     for (int idx = 0; idx < myself.num_points_; ++idx) {
-      double_data.push_back(myself.mutable_points()[9 * idx + 0]);
-      double_data.push_back(myself.mutable_points()[9 * idx + 1]);
-      double_data.push_back(myself.mutable_points()[9 * idx + 2]);
+      double_data.push_back(myself.mutable_points()[3 * idx + 0]);
+      double_data.push_back(myself.mutable_points()[3 * idx + 1]);
+      double_data.push_back(myself.mutable_points()[3 * idx + 2]);
     }
     return double_data;
   });
@@ -197,4 +218,5 @@ void add_pybinded_ceres_examples(py::module &m) {
   });
 
   m.def("CreateSnavelyCostFunction", &SnavelyReprojectionError::Create);
+  m.def("SolveBALProblemWithCPP",&SolveBALProblemWithCPP);
 }

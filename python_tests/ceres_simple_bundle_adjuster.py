@@ -2,7 +2,7 @@
 
 """
 import sys
-sys.path.insert(0, "../cmake-build-debug") # location of the PyCeres lib. By default this assumes you build the library
+sys.path.insert(0, "../build") # location of the PyCeres lib. By default this assumes you build the library
 # using the stand mkdir build , cd build, cmake ..
 
 import PyCeres # Import the Python Bindings
@@ -50,4 +50,12 @@ options.minimizer_progress_to_stdout=True
 summary=PyCeres.Summary()
 PyCeres.Solve(options,problem,summary)
 print(summary.FullReport())
-print(numpy_points[0])
+
+# Compare with CPP version
+
+PyCeres.SolveBALProblemWithCPP(bal_problem)
+cpp_points=bal_problem.points()
+cpp_points=np.array(cpp_points)
+cpp_points=np.reshape(cpp_points,(-1,3))
+print(" For point 1 Python has a value of " + str(numpy_points[0]) + " \n")
+print(" Cpp solved for point 1 a value of " + str(cpp_points[0]))
