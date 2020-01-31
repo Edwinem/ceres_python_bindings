@@ -27,7 +27,7 @@ problem.AddResidualBlock(cost_function,None,x)
 options=PyCeres.SolverOptions()
 options.linear_solver_type=PyCeres.LinearSolverType.DENSE_QR # Ceres enums live in PyCeres and require the enum Type
 options.minimizer_progress_to_stdout=True
-summary=PyCeres.SolverSummary()
+summary=PyCeres.Summary()
 PyCeres.Solve(options,problem,summary)
 print(summary.BriefReport() + " \n")
 print( "x : " + str(initial_x) + " -> " + str(x) + "\n")

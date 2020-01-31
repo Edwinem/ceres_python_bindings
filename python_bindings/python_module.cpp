@@ -10,8 +10,11 @@
 #include <ceres/parameter_block.h>
 
 #include <iostream>
+#include <string>
 
 namespace py = pybind11;
+
+void add_pybinded_ceres_examples(py::module &m);
 
 ceres::Problem CreatePythonProblem() {
   ceres::Problem::Options o;
@@ -89,18 +92,25 @@ class PyLossFunction : public ceres::LossFunction {
 
 };
 
-struct HelloWorldCostFunctor {
-  template<typename T>
-  bool operator()(const T *const x, T *residual) const {
-    residual[0] = T(10.0) - x[0];
-    return true;
-  }
-};
 
-ceres::CostFunction *CreateHelloWorldCostFunction() {
-  return new ceres::AutoDiffCostFunction<HelloWorldCostFunctor,
-                                         1,
-                                         1>(new HelloWorldCostFunctor);
+void ParseNumpyDataToVector(py::array_t<double>& np_buf,std::vector<double*>& vec){
+  py::buffer_info info = np_buf.request();
+  if (info.ndim > 2) {
+    std::string error_msg("Number of dimensions must be <=2. This function"
+        "only allows either an array or 2D matrix " + std::to_string(info.ndim));
+    throw std::runtime_error(
+        error_msg);
+  }
+  if (info.ndim == 2) {
+    // Row or Column Vector. Represents 1 parameter
+    if (info.shape[0] == 1 || info.shape[1] == 1) {
+      double *ptr = (double *) info.ptr;
+      vec.push_back(ptr);
+       
+    }
+  } else{ // is array so just take ptr value
+    vec.push_back((double*) info.ptr);
+    }
 }
 
 PYBIND11_MODULE(PyCeres, m) {
@@ -153,6 +163,54 @@ PYBIND11_MODULE(PyCeres, m) {
       .value("ITERATIVE_SCHUR", ceres::LinearSolverType::ITERATIVE_SCHUR)
       .value("CGNR", ceres::LinearSolverType::CGNR);
 
+  py::enum_<ceres::DoglegType>(m, "DoglegType")
+      .value("TRADITIONAL_DOGLEG",
+             ceres::DoglegType::TRADITIONAL_DOGLEG)
+      .value("SUBSPACE_DOGLEG", ceres::DoglegType::SUBSPACE_DOGLEG);
+
+  py::enum_<ceres::TrustRegionStrategyType>(m, "TrustRegionStrategyType")
+      .value("LEVENBERG_MARQUARDT",
+             ceres::TrustRegionStrategyType::LEVENBERG_MARQUARDT)
+      .value("DOGLEG", ceres::TrustRegionStrategyType::DOGLEG);
+
+  py::enum_<ceres::PreconditionerType>(m, "PreconditionerType")
+      .value("IDENTITY",
+             ceres::PreconditionerType::IDENTITY)
+      .value("JACOBI", ceres::PreconditionerType::JACOBI)
+      .value("SCHUR_JACOBI", ceres::PreconditionerType::SCHUR_JACOBI)
+      .value("CLUSTER_JACOBI", ceres::PreconditionerType::CLUSTER_JACOBI)
+      .value("CLUSTER_TRIDIAGONAL",
+             ceres::PreconditionerType::CLUSTER_TRIDIAGONAL)
+      .value("SUBSET", ceres::PreconditionerType::SUBSET);
+
+  py::enum_<ceres::VisibilityClusteringType>(m, "VisibilityClusteringType")
+      .value("CANONICAL_VIEWS",
+             ceres::VisibilityClusteringType::CANONICAL_VIEWS)
+      .value("SINGLE_LINKAGE", ceres::VisibilityClusteringType::SINGLE_LINKAGE);
+
+  py::enum_<ceres::DenseLinearAlgebraLibraryType>(m,
+                                                  "DenseLinearAlgebraLibraryType")
+      .value("EIGEN",
+             ceres::DenseLinearAlgebraLibraryType::EIGEN)
+      .value("LAPACK", ceres::DenseLinearAlgebraLibraryType::LAPACK);
+
+  py::enum_<ceres::SparseLinearAlgebraLibraryType>(m,
+                                                   "SparseLinearAlgebraLibraryType")
+      .value("SUITE_SPARSE",
+             ceres::SparseLinearAlgebraLibraryType::SUITE_SPARSE)
+      .value("CX_SPARSE", ceres::SparseLinearAlgebraLibraryType::CX_SPARSE)
+      .value("EIGEN_SPARSE",
+             ceres::SparseLinearAlgebraLibraryType::EIGEN_SPARSE)
+      .value("ACCELERATE_SPARSE",
+             ceres::SparseLinearAlgebraLibraryType::ACCELERATE_SPARSE)
+      .value("NO_SPARSE",
+             ceres::SparseLinearAlgebraLibraryType::NO_SPARSE);
+
+  py::enum_<ceres::LoggingType>(m, "LoggingType")
+      .value("SILENT",
+             ceres::LoggingType::SILENT)
+      .value("PER_MINIMIZER_ITERATION",
+             ceres::LoggingType::PER_MINIMIZER_ITERATION);
 
   using options=ceres::Problem::Options;
   py::class_<ceres::Problem::Options> option(m, "ProblemOptions");
@@ -216,57 +274,31 @@ PYBIND11_MODULE(PyCeres, m) {
               [](ceres::Problem &myself,
                  ceres::CostFunction *cost,
                  ceres::LossFunction *loss,
-                 py::array_t<double> values) {
+                 py::array_t<double>& values) {
                 std::vector<double *> pointer_values;
-                py::buffer_info info = values.request();
-//    if (info.ndim != 1) {
-//      throw std::runtime_error("Number of dimensions must be one");
-//    }
-                double *ptr = (double *) info.ptr;
-//                for (size_t idx = 0; idx < info.shape[0]; idx++) {
-//                  pointer_values.push_back(&ptr[idx]);
-//                  std::cout << &ptr[idx] << std::endl;
-//                }
-                return myself.AddResidualBlock(cost, loss, ptr);
+                ParseNumpyDataToVector(values,pointer_values);
+
+
+                return myself.AddResidualBlock(cost, loss, pointer_values[0]);
               }, py::return_value_policy::reference);
-
-  //const int MAX_ADDRESIDUALBLOCK_VARIABLES=10;
-
-//#define REP0(X)
-//#define REP1(X) X
-//#define REP2(X) REP1(X) X
-//#define REP3(X) REP2(X) X
-//#define REP4(X) REP3(X) X
-//#define REP5(X) REP4(X) X
-//#define REP6(X) REP5(X) X
-//#define REP7(X) REP6(X) X
-//#define REP8(X) REP7(X) X
-//#define REP9(X) REP8(X) X
-//#define REP10(X) REP9(X) X
-//
-//#define REP(HUNDREDS,TENS,ONES,X) \
-//  REP##HUNDREDS(REP10(REP10(X))) \
-//  REP##TENS(REP10(X)) \
-//  REP##ONES(X)
+  problem.def("AddResidualBlock",
+              [](ceres::Problem &myself,
+                 ceres::CostFunction *cost,
+                 ceres::LossFunction *loss,
+                 py::array_t<double>& values1,
+                 py::array_t<double>& values2) {
+                std::vector<double *> pointer_values;
+                ParseNumpyDataToVector(values1,pointer_values);
+                ParseNumpyDataToVector(values2,pointer_values);
 
 
-
-
-
-
-//  problem.def("AddResidualBlock",(ceres::ResidualBlockId (ceres::Problem::*)(ceres::CostFunction*,
-//                                                   ceres::LossFunction*,
-//                                                   double* const* const,
-//  int))&ceres::Problem::AddResidualBlock);
-  /*
-  problem.def("AddResidualBlock",py::overload_cast<ceres::CostFunction*,
-                                                   ceres::LossFunction*,
-                                                   double*,double*>(&ceres::Problem::AddResidualBlock));*/
-
+                return myself.AddResidualBlock(cost, loss, pointer_values[0],pointer_values[1]);
+              },py::keep_alive<1,2>(), py::return_value_policy::reference);
 
   py::class_<ceres::Solver::Options> solver_options(m, "SolverOptions");
   using s_options=ceres::Solver::Options;
   solver_options.def(py::init<>());
+  solver_options.def("IsValid", &s_options::IsValid);
   solver_options.def_readwrite("minimizer_type", &s_options::minimizer_type);
   solver_options.def_readwrite("line_search_direction_type",
                                &s_options::line_search_direction_type);
@@ -279,11 +311,76 @@ PYBIND11_MODULE(PyCeres, m) {
                                &s_options::use_approximate_eigenvalue_bfgs_scaling);
   solver_options.def_readwrite("line_search_interpolation_type",
                                &s_options::line_search_interpolation_type);
-  solver_options.def_readwrite("minimizer_progress_to_stdout",
-                               &s_options::minimizer_progress_to_stdout);
-
+  solver_options.def_readwrite("min_line_search_step_size",
+                               &s_options::min_line_search_step_size);
+  solver_options.def_readwrite("line_search_sufficient_function_decrease",
+                               &s_options::line_search_sufficient_function_decrease);
+  solver_options.def_readwrite("max_line_search_step_contraction",
+                               &s_options::max_line_search_step_contraction);
+  solver_options.def_readwrite("min_line_search_step_contraction",
+                               &s_options::min_line_search_step_contraction);
+  solver_options.def_readwrite("max_num_line_search_step_size_iterations",
+                               &s_options::max_num_line_search_step_size_iterations);
+  solver_options.def_readwrite("max_num_line_search_direction_restarts",
+                               &s_options::max_num_line_search_direction_restarts);
+  solver_options.def_readwrite("line_search_sufficient_curvature_decrease",
+                               &s_options::line_search_sufficient_curvature_decrease);
+  solver_options.def_readwrite("max_line_search_step_expansion",
+                               &s_options::max_line_search_step_expansion);
+  solver_options.def_readwrite("trust_region_strategy_type",
+                               &s_options::trust_region_strategy_type);
+  solver_options.def_readwrite("dogleg_type", &s_options::dogleg_type);
+  solver_options.def_readwrite("use_nonmonotonic_steps",
+                               &s_options::use_nonmonotonic_steps);
+  solver_options.def_readwrite("max_consecutive_nonmonotonic_steps",
+                               &s_options::max_consecutive_nonmonotonic_steps);
+  solver_options.def_readwrite("max_num_iterations",
+                               &s_options::max_num_iterations);
+  solver_options.def_readwrite("max_solver_time_in_seconds",
+                               &s_options::max_solver_time_in_seconds);
+  solver_options.def_readwrite("num_threads", &s_options::num_threads);
+  solver_options.def_readwrite("initial_trust_region_radius",
+                               &s_options::initial_trust_region_radius);
+  solver_options.def_readwrite("max_trust_region_radius",
+                               &s_options::max_trust_region_radius);
+  solver_options.def_readwrite("min_trust_region_radius",
+                               &s_options::min_trust_region_radius);
+  solver_options.def_readwrite("min_relative_decrease",
+                               &s_options::min_relative_decrease);
+  solver_options.def_readwrite("min_lm_diagonal", &s_options::min_lm_diagonal);
+  solver_options.def_readwrite("max_lm_diagonal", &s_options::max_lm_diagonal);
+  solver_options.def_readwrite("max_num_consecutive_invalid_steps",
+                               &s_options::max_num_consecutive_invalid_steps);
+  solver_options.def_readwrite("function_tolerance",
+                               &s_options::function_tolerance);
+  solver_options.def_readwrite("gradient_tolerance",
+                               &s_options::gradient_tolerance);
+  solver_options.def_readwrite("parameter_tolerance",
+                               &s_options::parameter_tolerance);
   solver_options.def_readwrite("linear_solver_type",
                                &s_options::linear_solver_type);
+  solver_options.def_readwrite("preconditioner_type",
+                               &s_options::preconditioner_type);
+  solver_options.def_readwrite("visibility_clustering_type",
+                               &s_options::visibility_clustering_type);
+  solver_options.def_readwrite("dense_linear_algebra_library_type",
+                               &s_options::dense_linear_algebra_library_type);
+  solver_options.def_readwrite("sparse_linear_algebra_library_type",
+                               &s_options::sparse_linear_algebra_library_type);
+  solver_options.def_readwrite("use_explicit_schur_complement",
+                               &s_options::use_explicit_schur_complement);
+  solver_options.def_readwrite("use_postordering",
+                               &s_options::use_postordering);
+  solver_options.def_readwrite("dynamic_sparsity",
+                               &s_options::dynamic_sparsity);
+  solver_options.def_readwrite("use_mixed_precision_solves",
+                               &s_options::use_mixed_precision_solves);
+  solver_options.def_readwrite("max_num_refinement_iterations",
+                               &s_options::max_num_refinement_iterations);
+  solver_options.def_readwrite("use_inner_iterations",
+                               &s_options::use_inner_iterations);
+  solver_options.def_readwrite("minimizer_progress_to_stdout",
+                               &s_options::minimizer_progress_to_stdout);
 
   py::class_<ceres::CostFunction, PyCostFunction /* <--- trampoline*/>(m,
                                                                        "CostFunction")
@@ -296,9 +393,11 @@ PYBIND11_MODULE(PyCeres, m) {
   py::class_<ceres::LossFunction, PyLossFunction>(m, "LossFunction")
       .def(py::init<>());
 
-  py::class_<ceres::Solver::Summary> solver_summary(m, "SolverSummary");
+  py::class_<ceres::Solver::Summary> solver_summary(m, "Summary");
   solver_summary.def(py::init<>());
   solver_summary.def("BriefReport", &ceres::Solver::Summary::BriefReport);
+  solver_summary.def("FullReport",&ceres::Solver::Summary::FullReport);
+  solver_summary.def("IsSolutionUsable",&ceres::Solver::Summary::IsSolutionUsable);
 
 
 
@@ -307,6 +406,6 @@ PYBIND11_MODULE(PyCeres, m) {
                                    ceres::Problem *,
                                    ceres::Solver::Summary *>(&ceres::Solve));
 
-  m.def("CreateHelloWorldCostFunction", &CreateHelloWorldCostFunction);
+  add_pybinded_ceres_examples(m);
 
 }

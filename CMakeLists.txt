@@ -12,7 +12,7 @@ include_directories(${PROJECT_SOURCE_DIR}/ceres-solver/config)
 add_definitions(-DCERES_NO_THREADS)
 
 add_subdirectory(pybind11)
-pybind11_add_module(PyCeres python_bindings/python_module.cpp)
+pybind11_add_module(PyCeres python_bindings/python_module.cpp python_bindings/ceres_examples_module.cpp)
 
 find_package(Eigen3 3.3 CONFIG REQUIRED
         HINTS ${HOMEBREW_INCLUDE_DIR_HINTS})
@@ -28,6 +28,6 @@ if (EIGEN3_FOUND)
     include_directories(${EIGEN3_INCLUDE_DIR})
 endif()
 
-target_link_libraries(PyCeres PRIVATE /home/niko/programming/ceres_bindings/ceres-solver/build/lib/libceres-debug.a -lglog -llapack -lcxsparse)
+target_link_libraries(PyCeres PRIVATE /home/niko/programming/ceres_bindings/ceres-solver/build_release/lib/libceres.a -lglog -llapack -lcxsparse)
 
 #add_executable(ceres_bindings main.cpp python_bindings/python_module.cpp)
