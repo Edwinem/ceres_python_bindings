@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.02)
 project(ceres_bindings)
 
-set(CMAKE_CXX_STANDARD 14)
+set(CMAKE_CXX_STANDARD 11)
 
 include_directories(${PROJECT_SOURCE_DIR}/pybind11/include)
 include_directories(${PROJECT_SOURCE_DIR}/ceres-solver/include)
