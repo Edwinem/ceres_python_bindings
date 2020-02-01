@@ -38,18 +38,55 @@ class PyCostFunction : public ceres::CostFunction {
  public:
   /* Inherit the constructors */
   using ceres::CostFunction::CostFunction;
+  using ceres::CostFunction::set_num_residuals;
 
   bool Evaluate(double const *const *parameters,
                 double *residuals,
                 double **jacobians) const override {
-
     // Resize the vectors passed to python to the proper size. And set the
     // pointer values
-    parameters_vec.resize(this->parameter_block_sizes().size());
-    jacobians_vec.resize(this->parameter_block_sizes().size());
-    for (size_t idx = 0; idx < parameter_block_sizes().size(); ++idx) {
-      parameters_vec[idx] = const_cast<double *>(parameters[idx]);
-      jacobians_vec[idx] = jacobians[idx];
+    if (!cached_flag) {
+      parameters_vec.reserve(this->parameter_block_sizes().size());
+      jacobians_vec.reserve(this->parameter_block_sizes().size());
+      residuals_wrap = py::array_t<double>(num_residuals(), residuals, dummy);
+      for (size_t idx = 0; idx < parameter_block_sizes().size(); ++idx) {
+        parameters_vec.emplace_back(py::array_t<double>(this->parameter_block_sizes()[idx],
+                                                        parameters[idx],
+                                                        dummy));
+        jacobians_vec.emplace_back(py::array_t<double>(
+            this->parameter_block_sizes()[idx] * num_residuals(),
+            jacobians[idx],
+            dummy));
+
+      }
+      cached_flag = true;
+
+    }
+
+    // Check if the pointers have change and if they have then change them
+    auto info = residuals_wrap.request(true);
+    if (info.ptr != residuals) {
+      residuals_wrap = py::array_t<double>(num_residuals(), residuals, dummy);
+    }
+    info = parameters_vec[0].request(true);
+    if (info.ptr != parameters) {
+      for (size_t idx = 0; idx < parameters_vec.size(); ++idx) {
+        parameters_vec[idx] =
+            py::array_t<double>(this->parameter_block_sizes()[idx],
+                                parameters[idx],
+                                dummy);
+      }
+    }
+    if (jacobians) {
+      info = jacobians_vec[0].request(true);
+      if (info.ptr != jacobians) {
+        for (size_t idx = 0; idx < jacobians_vec.size(); ++idx) {
+          jacobians_vec[idx] = py::array_t<double>(
+              this->parameter_block_sizes()[idx] * num_residuals(),
+              jacobians[idx],
+              dummy);
+        }
+      }
     }
 
     pybind11::gil_scoped_acquire gil;
@@ -57,7 +94,19 @@ class PyCostFunction : public ceres::CostFunction {
         pybind11::get_overload(static_cast<const ceres::CostFunction *>(this),
                                "Evaluate");
     if (overload) {
-      auto o = overload(this->parameters_vec, residuals, this->jacobians_vec);
+      if (jacobians) {
+        auto o = overload.operator()<pybind11::return_value_policy::reference>(
+            parameters_vec,
+            residuals_wrap,
+            jacobians_vec);
+        return pybind11::detail::cast_safe<bool>(std::move(o));
+      } else {
+        auto o = overload.operator()<pybind11::return_value_policy::reference>(
+            parameters_vec,
+            residuals_wrap,
+            nullptr);
+        return pybind11::detail::cast_safe<bool>(std::move(o));
+      }
 
       // I believe we don't need this as we are returning a bool
 //      if (pybind11::detail::cast_is_temporary_value_reference<bool>::value) {
@@ -66,7 +115,6 @@ class PyCostFunction : public ceres::CostFunction {
 //      } else
 
 
-      return pybind11::detail::cast_safe<bool>(std::move(o));
     }
     pybind11::pybind11_fail("Tried to call pure virtual function \"" PYBIND11_STRINGIFY(
         Ceres::CostFunction) "::" "Evaluate \"");
@@ -76,8 +124,14 @@ class PyCostFunction : public ceres::CostFunction {
   // Vectors used to pass double pointers to python as pybind does not wrap
   // double pointers(**) like Ceres uses.
   // Mutable so they can be modified by the const function.
-  mutable std::vector<double *> parameters_vec;
-  mutable std::vector<double *> jacobians_vec;
+  mutable std::vector<py::array_t<double>> parameters_vec;
+  mutable std::vector<py::array_t<double>> jacobians_vec;
+  mutable bool cached_flag = false; // Flag used to determine if the vectors
+  // need to be resized
+  mutable py::array_t<double> residuals_wrap; // Buffer to contain the residuals
+  // pointer
+  mutable py::str dummy; // Dummy variable for pybind11 so it doesn't make a
+  // copy
 
 };
 
@@ -92,12 +146,13 @@ class PyLossFunction : public ceres::LossFunction {
 
 };
 
-
-void ParseNumpyDataToVector(py::array_t<double>& np_buf,std::vector<double*>& vec){
+void ParseNumpyDataToVector(py::array_t<double> &np_buf,
+                            std::vector<double *> &vec) {
   py::buffer_info info = np_buf.request();
   if (info.ndim > 2) {
     std::string error_msg("Number of dimensions must be <=2. This function"
-        "only allows either an array or 2D matrix " + std::to_string(info.ndim));
+                          "only allows either an array or 2D matrix "
+                              + std::to_string(info.ndim));
     throw std::runtime_error(
         error_msg);
   }
@@ -106,11 +161,11 @@ void ParseNumpyDataToVector(py::array_t<double>& np_buf,std::vector<double*>& ve
     if (info.shape[0] == 1 || info.shape[1] == 1) {
       double *ptr = (double *) info.ptr;
       vec.push_back(ptr);
-       
+
     }
-  } else{ // is array so just take ptr value
-    vec.push_back((double*) info.ptr);
-    }
+  } else { // is array so just take ptr value
+    vec.push_back((double *) info.ptr);
+  }
 }
 
 PYBIND11_MODULE(PyCeres, m) {
@@ -274,10 +329,9 @@ PYBIND11_MODULE(PyCeres, m) {
               [](ceres::Problem &myself,
                  ceres::CostFunction *cost,
                  ceres::LossFunction *loss,
-                 py::array_t<double>& values) {
+                 py::array_t<double> &values) {
                 std::vector<double *> pointer_values;
-                ParseNumpyDataToVector(values,pointer_values);
-
+                ParseNumpyDataToVector(values, pointer_values);
 
                 return myself.AddResidualBlock(cost, loss, pointer_values[0]);
               }, py::return_value_policy::reference);
@@ -285,15 +339,17 @@ PYBIND11_MODULE(PyCeres, m) {
               [](ceres::Problem &myself,
                  ceres::CostFunction *cost,
                  ceres::LossFunction *loss,
-                 py::array_t<double>& values1,
-                 py::array_t<double>& values2) {
+                 py::array_t<double> &values1,
+                 py::array_t<double> &values2) {
                 std::vector<double *> pointer_values;
-                ParseNumpyDataToVector(values1,pointer_values);
-                ParseNumpyDataToVector(values2,pointer_values);
+                ParseNumpyDataToVector(values1, pointer_values);
+                ParseNumpyDataToVector(values2, pointer_values);
 
-
-                return myself.AddResidualBlock(cost, loss, pointer_values[0],pointer_values[1]);
-              },py::keep_alive<1,2>(), py::return_value_policy::reference);
+                return myself.AddResidualBlock(cost,
+                                               loss,
+                                               pointer_values[0],
+                                               pointer_values[1]);
+              }, py::keep_alive<1, 2>(), py::return_value_policy::reference);
 
   py::class_<ceres::Solver::Options> solver_options(m, "SolverOptions");
   using s_options=ceres::Solver::Options;
@@ -388,7 +444,18 @@ PYBIND11_MODULE(PyCeres, m) {
       .def("num_residuals", &ceres::CostFunction::num_residuals)
       .def("num_parameter_blocks", [](ceres::CostFunction &myself) {
         return myself.parameter_block_sizes().size();
-      });
+      })
+      .def("parameter_block_sizes",
+           &ceres::CostFunction::parameter_block_sizes,
+           py::return_value_policy::reference)
+      .def("set_num_residuals", &PyCostFunction::set_num_residuals)
+      .def("set_parameter_block_sizes",
+           [](ceres::CostFunction &myself, std::vector<int32_t> &sizes) {
+             for (auto s:sizes) {
+               const_cast<std::vector<int32_t> &>(myself.parameter_block_sizes()).push_back(
+                   s);
+             }
+           });
 
   py::class_<ceres::LossFunction, PyLossFunction>(m, "LossFunction")
       .def(py::init<>());
@@ -396,8 +463,13 @@ PYBIND11_MODULE(PyCeres, m) {
   py::class_<ceres::Solver::Summary> solver_summary(m, "Summary");
   solver_summary.def(py::init<>());
   solver_summary.def("BriefReport", &ceres::Solver::Summary::BriefReport);
-  solver_summary.def("FullReport",&ceres::Solver::Summary::FullReport);
-  solver_summary.def("IsSolutionUsable",&ceres::Solver::Summary::IsSolutionUsable);
+  solver_summary.def("FullReport", &ceres::Solver::Summary::FullReport);
+  solver_summary.def("IsSolutionUsable",
+                     &ceres::Solver::Summary::IsSolutionUsable);
+  solver_summary.def_readwrite("initial_cost",
+                               &ceres::Solver::Summary::initial_cost);
+  solver_summary.def_readwrite("final_cost",
+                               &ceres::Solver::Summary::final_cost);
 
 
 
