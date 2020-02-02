@@ -31,7 +31,7 @@ Your ceres directory should now look something like this.
   ├── ceres_python_bindings/ - your copied folder
   │   ├── pybind11 
   │   ├── python_bindings
-      ├── ...
+  │   ├── ...
   │   └── AddToCeres.cmake - file to include in Ceres CMakeLists.txt
 ```
 
@@ -76,6 +76,11 @@ Code for this example can be found in **python_tests/ceres_hello_world_example.p
 This example is the same as the hello world example from Ceres. 
 
 ```python
+pyceres_location="../../build/lib" # assuming library was built along with ceres
+# and cmake directory is called build
+import sys
+sys.path.insert(0, pyceres_location)
+
 import PyCeres # Import the Python Bindings
 import numpy as np
 
@@ -139,12 +144,10 @@ class QuadraticCostFunction(PyCeres.CostFunction):
 Some things to be aware of for a custom CostFunction
 
 * residuals is a numpy array
-* parameters,jacobians are lists of numpy arrays ([np1,np2,...])
+* parameters,jacobians are lists of numpy arrays ([arr1,arr2,...])
     * Indexing works similar to Ceres C++. parameters[i] is the ith parameter block
     * You must always index into the list first. Even if it only has 1 value. 
 * You must call the base constructor with super.
-
-
 
 ### CostFunction defined in C++
 
@@ -155,7 +158,7 @@ Some things to be aware of for a custom CostFunction
 when using it from Python. The main problem is that Python does not really have
 the concept of giving away ownership of memory. So it may try to delete something
 that Ceres still believes is valid.
-* Careful with wrapping AutodiffCostfunction. It takes over the memory of a
+* Careful with wrapping AutodiffCostfunction. It takes over the memory of a cost
 functor which can cause errors.
 
 
