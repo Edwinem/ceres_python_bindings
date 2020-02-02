@@ -150,6 +150,36 @@ Some things to be aware of for a custom CostFunction
 * You must call the base constructor with super.
 
 ### CostFunction defined in C++
+It is possible to define your custom CostFunction in C++ and utilize it within 
+the python framework. In order to do this we provide a file **python_bindings/custom_cpp_cost_functions.cpp**.
+which provides a place to write your own wrapper code. The easiest way to do this
+is create an initialization function that creates your custom CostFunction class
+and returns a ceres::CostFunction* to it. That function should then be wrapped in
+the *void add_custom_cost_functions(py::module& m)* function.
+
+It should end up looking something like this.
+```cpp
+
+#include <CUSTOM_HEADER_FILES_WITH_COST_FUNCTION>
+
+// Create a function that initiliazes your CostFunction and returns a ceres::CostFunction*
+
+ceres::CostFunction* CreateCustomCostFunction(arg1,arg2,...){
+    return new CustomCostFunction(arg1,arg2,...);
+}
+
+// In file custom_cpp_cost_function add the following line
+
+void add_custom_cost_functions(py::module &m) {
+    // ....
+    m.def("CreateCustomCostFunction",&CreateCustomCostFunction);
+}
+
+```
+
+We provide a basic example of this in **custom_cpp_cost_functions.cpp**. 
+Note you are responsible for ensuring that all the dependencies and includes are
+set correctly for your library.
 
 
 ## Warnings:
@@ -172,7 +202,7 @@ operation.
 - [ ] Investigate how to wrap a basic python function for evaluate rather than 
 go through the CostFunction( something like in the C api).
 - [ ] Add docstrings for all the wrapped stuff
-- [ ] Add a place for users to define their CostFunctions in C++
+- [X] Add a place for users to define their CostFunctions in C++
 - [ ] Evaluate speed of Python Cost Function vs C++
 - [ ] Clean up AddResidualBlock() and set up the correct error checks
 - [ ] Figure out how google log should work with Python

@@ -14,7 +14,7 @@ include_directories(${CERES_FOLDER}/config)
 add_definitions(-DCERES_NO_THREADS)
 
 add_subdirectory(pybind11)
-pybind11_add_module(PyCeres python_bindings/python_module.cpp python_bindings/ceres_examples_module.cpp)
+pybind11_add_module(PyCeres python_bindings/python_module.cpp python_bindings/ceres_examples_module.cpp python_bindings/custom_cpp_cost_functions.cpp)
 
 find_package(Eigen3 3.3 CONFIG REQUIRED
         HINTS ${HOMEBREW_INCLUDE_DIR_HINTS})

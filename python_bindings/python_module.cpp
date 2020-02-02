@@ -44,10 +44,15 @@
 #include <string>
 
 namespace py = pybind11;
+
+// Used for overloaded functions in C++11
 template<typename... Args>
 using overload_cast_ = pybind11::detail::overload_cast_impl<Args...>;
 
+
+// Forward decls for additionally modules
 void add_pybinded_ceres_examples(py::module &m);
+void add_custom_cost_functions(py::module &m);
 
 ceres::Problem CreatePythonProblem() {
   ceres::Problem::Options o;
@@ -512,5 +517,6 @@ PYBIND11_MODULE(PyCeres, m) {
                                 ceres::Solver::Summary *>()(&ceres::Solve));
 
   add_pybinded_ceres_examples(m);
+  add_custom_cost_functions(m);
 
 }
