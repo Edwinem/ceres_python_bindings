@@ -44,6 +44,29 @@ include(ceres_python_bindings/AddToCeres.cmake)
 
 Build Ceres as you would normally.
 
+### Build seperately and link to Ceres
+
+The CMakeLists.txt for this option still needs more work. For now you have to 
+modify it yourself and set the location of *libceres.a*.
+
+Clone as you would normally.
+
+Run the standard cmake procedure.
+
+```shell
+cd ceres_python_bindings
+mkdir build
+cd build
+cmake ..
+make
+```
+
+Note this way has a couple of problems.
+
+* The *CMakelists.txt* must define some of Ceres's compile time flags such as the threading model, and
+it should match ,however, *libceres.a* was built. Else errors may occur.
+* You have to take care of linking the other libraries such as *suitesparse* and *glog*.
+
 ## How to 
 
 Assuming you built the library correctly you should now have a file called **PyCeres.so**. 
