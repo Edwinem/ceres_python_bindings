@@ -49,7 +49,6 @@ namespace py = pybind11;
 template<typename... Args>
 using overload_cast_ = pybind11::detail::overload_cast_impl<Args...>;
 
-
 // Forward decls for additionally modules
 void add_pybinded_ceres_examples(py::module &m);
 void add_custom_cost_functions(py::module &m);
@@ -184,6 +183,39 @@ class PyLossFunction : public ceres::LossFunction {
 
 };
 
+class PyEvaluationCallBack : public ceres::EvaluationCallback {
+ public:
+  /* Inherit the constructors */
+  using ceres::EvaluationCallback::EvaluationCallback;
+
+  void PrepareForEvaluation(bool evaluate_jacobians,
+                            bool new_evaluation_point) override {
+    PYBIND11_OVERLOAD_PURE(
+        void, /* Return type */
+        ceres::EvaluationCallback,      /* Parent class */
+        PrepareForEvaluation,          /* Name of function in C++ (must match Python name) */
+        evaluate_jacobians, new_evaluation_point      /* Argument(s) */
+    );
+  }
+
+};
+
+class PyIterationCallback : public ceres::IterationCallback {
+ public:
+  /* Inherit the constructors */
+  using ceres::IterationCallback::IterationCallback;
+
+  ceres::CallbackReturnType operator()(const ceres::IterationSummary &summary) override {
+    PYBIND11_OVERLOAD_PURE(
+        ceres::CallbackReturnType, /* Return type */
+        ceres::IterationCallback,      /* Parent class */
+        operator(),          /* Name of function in C++ (must match Python name) */
+        summary      /* Argument(s) */
+    );
+  }
+
+};
+
 void ParseNumpyDataToVector(py::array_t<double> &np_buf,
                             std::vector<double *> &vec) {
   py::buffer_info info = np_buf.request();
@@ -304,6 +336,16 @@ PYBIND11_MODULE(PyCeres, m) {
              ceres::LoggingType::SILENT)
       .value("PER_MINIMIZER_ITERATION",
              ceres::LoggingType::PER_MINIMIZER_ITERATION);
+
+  py::enum_<ceres::CallbackReturnType>(m, "CallbackReturnType")
+      .value("SOLVER_CONTINUE", ceres::CallbackReturnType::SOLVER_CONTINUE)
+      .value("SOLVER_ABORT", ceres::CallbackReturnType::SOLVER_ABORT)
+      .value("SOLVER_TERMINATE_SUCCESSFULLY",
+             ceres::CallbackReturnType::SOLVER_TERMINATE_SUCCESSFULLY);
+
+  py::enum_<ceres::DumpFormatType>(m, "DumpFormatType")
+      .value("CONSOLE", ceres::DumpFormatType::CONSOLE)
+      .value("TEXTFILE", ceres::DumpFormatType::TEXTFILE);
 
   using options=ceres::Problem::Options;
   py::class_<ceres::Problem::Options> option(m, "ProblemOptions");
@@ -495,6 +537,17 @@ PYBIND11_MODULE(PyCeres, m) {
              }
            });
 
+  py::class_<ceres::TrivialLoss>(m, "TrivialLoss")
+      .def(py::init<>());
+
+  py::class_<ceres::HuberLoss>(m, "HuberLoss")
+      .def(py::init<double>());
+  py::class_<ceres::SoftLOneLoss>(m, "SoftLOneLoss")
+      .def(py::init<double>());
+
+  py::class_<ceres::CauchyLoss>(m, "CauchyLoss")
+      .def(py::init<double>());
+
   py::class_<ceres::LossFunction, PyLossFunction>(m, "LossFunction")
       .def(py::init<>());
 
@@ -509,6 +562,52 @@ PYBIND11_MODULE(PyCeres, m) {
   solver_summary.def_readwrite("final_cost",
                                &ceres::Solver::Summary::final_cost);
 
+  py::class_<ceres::IterationSummary> iteration_summary(m, "IterationSummary");
+  using it_sum=ceres::IterationSummary;
+  iteration_summary.def(py::init<>());
+  iteration_summary.def_readonly("iteration", &it_sum::iteration);
+  iteration_summary.def_readonly("step_is_valid", &it_sum::step_is_valid);
+  iteration_summary.def_readonly("step_is_nonmonotonic",
+                                 &it_sum::step_is_nonmonotonic);
+  iteration_summary.def_readonly("step_is_succesful",
+                                 &it_sum::step_is_successful);
+  iteration_summary.def_readonly("cost", &it_sum::cost);
+  iteration_summary.def_readonly("cost_change", &it_sum::cost_change);
+  iteration_summary.def_readonly("gradient_max_norm",
+                                 &it_sum::gradient_max_norm);
+  iteration_summary.def_readonly("gradient_norm", &it_sum::gradient_norm);
+  iteration_summary.def_readonly("step_norm", &it_sum::step_norm);
+  iteration_summary.def_readonly("relative_decrease",
+                                 &it_sum::relative_decrease);
+  iteration_summary.def_readonly("trust_region_radius",
+                                 &it_sum::trust_region_radius);
+  iteration_summary.def_readonly("eta", &it_sum::eta);
+  iteration_summary.def_readonly("step_size", &it_sum::step_size);
+  iteration_summary.def_readonly("line_search_function_evaluations",
+                                 &it_sum::line_search_function_evaluations);
+  iteration_summary.def_readonly("line_search_gradient_evaluations",
+                                 &it_sum::line_search_gradient_evaluations);
+  iteration_summary.def_readonly("line_search_iterations",
+                                 &it_sum::line_search_iterations);
+  iteration_summary.def_readonly("linear_solver_iterations",
+                                 &it_sum::linear_solver_iterations);
+  iteration_summary.def_readonly("iteration_time_in_seconds",
+                                 &it_sum::iteration_time_in_seconds);
+  iteration_summary.def_readonly("step_solver_time_in_seconds",
+                                 &it_sum::step_solver_time_in_seconds);
+  iteration_summary.def_readonly("cumulative_time_in_seconds",
+                                 &it_sum::cumulative_time_in_seconds);
+
+  py::class_<ceres::IterationCallback,
+             PyIterationCallback /* <--- trampoline*/>(m,
+                                                       "IterationCallback")
+      .def(py::init<>());
+
+  py::class_<ceres::EvaluationCallback,
+             PyEvaluationCallBack /* <--- trampoline*/>(m,
+                                                        "EvaluationCallback")
+      .def(py::init<>());
+
 
 
   // The main Solve function
@@ -518,5 +617,16 @@ PYBIND11_MODULE(PyCeres, m) {
 
   add_pybinded_ceres_examples(m);
   add_custom_cost_functions(m);
+
+
+
+  // Untested
+
+  // Things below this line are wrapped ,but are rarely used even in C++ ceres.
+  // and thus are not tested.
+
+//  py::class_<ceres::ScaledLoss>(m, "ScaledLoss")
+//      .def(py::init<ceres::LossFunction *, double, ceres::Ownership>(),
+//           py::arg("ownership") = ceres::Ownership::DO_NOT_TAKE_OWNERSHIP);
 
 }
