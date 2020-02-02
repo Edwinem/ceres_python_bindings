@@ -11,3 +11,10 @@ py::return_value_policy::reference so python doesn't manage that memory.
 CostFunctor is created in Python then a double free will happen as the python 
 garbage collector will delete the AutodiffCostFunction(deletes CostFunctor) and
 the CostFunctor.
+* Python manages the memory for the cost functions. This means it can delete the 
+cost function before the Problem even uses it. In order to avoid this you have
+to make the relationship clear that cost function scope is dependent on the
+problem. This is done with the py::keep_alive<> command for AddResidualBlock
+* End user must call super().__init__() on custom CostFunctions define in
+Python. If this is not done then the Base Class CostFunction is never
+initialized.

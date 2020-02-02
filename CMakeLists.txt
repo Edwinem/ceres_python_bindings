@@ -3,11 +3,13 @@ project(ceres_bindings)
 
 set(CMAKE_CXX_STANDARD 11)
 
-include_directories(${PROJECT_SOURCE_DIR}/pybind11/include)
-include_directories(${PROJECT_SOURCE_DIR}/ceres-solver/include)
-include_directories(${PROJECT_SOURCE_DIR}/ceres-solver/internal)
+set(CERES_FOLDER $ENV{HOME}/programming/libs/ceres-solver)
 
-include_directories(${PROJECT_SOURCE_DIR}/ceres-solver/config)
+include_directories(${PROJECT_SOURCE_DIR}/pybind11/include)
+include_directories(${CERES_FOLDER}/include)
+include_directories(${CERES_FOLDER}/internal)
+
+include_directories(${CERES_FOLDER}/config)
 
 add_definitions(-DCERES_NO_THREADS)
 
@@ -28,6 +30,6 @@ if (EIGEN3_FOUND)
     include_directories(${EIGEN3_INCLUDE_DIR})
 endif()
 
-target_link_libraries(PyCeres PRIVATE /home/niko/programming/ceres_bindings/ceres-solver/build_release/lib/libceres.a -lglog -llapack -lcxsparse)
+target_link_libraries(PyCeres PRIVATE ${CERES_FOLDER}/build/lib/libceres.a -lglog -llapack -lcxsparse)
 
 #add_executable(ceres_bindings main.cpp python_bindings/python_module.cpp)
