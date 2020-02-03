@@ -216,12 +216,16 @@ class PyIterationCallback : public ceres::IterationCallback {
 
 };
 
-void ParseNumpyDataToVector(py::array_t<double> &np_buf,
-                            std::vector<double *> &vec) {
+// Parses a numpy array and extracts the pointer to the first element.
+// Requires that the numpy array be either an array or a row/column vector
+double *ParseNumpyData(py::array_t<double> &np_buf) {
   py::buffer_info info = np_buf.request();
+
+  // This is essentially just all error checking. As it will always be the info
+  // ptr
   if (info.ndim > 2) {
     std::string error_msg("Number of dimensions must be <=2. This function"
-                          "only allows either an array or 2D matrix "
+                          "only allows either an array or row/column vector(2D matrix) "
                               + std::to_string(info.ndim));
     throw std::runtime_error(
         error_msg);
@@ -229,13 +233,16 @@ void ParseNumpyDataToVector(py::array_t<double> &np_buf,
   if (info.ndim == 2) {
     // Row or Column Vector. Represents 1 parameter
     if (info.shape[0] == 1 || info.shape[1] == 1) {
-      double *ptr = (double *) info.ptr;
-      vec.push_back(ptr);
-
+    } else {
+      std::string error_msg
+          ("Matrix is not a row or column vector and instead has size "
+               + std::to_string(info.shape[0]) + "x"
+               + std::to_string(info.shape[1]));
+      throw std::runtime_error(
+          error_msg);
     }
-  } else { // is array so just take ptr value
-    vec.push_back((double *) info.ptr);
   }
+  return (double *) info.ptr;
 }
 
 PYBIND11_MODULE(PyCeres, m) {
@@ -410,11 +417,14 @@ PYBIND11_MODULE(PyCeres, m) {
                  ceres::CostFunction *cost,
                  ceres::LossFunction *loss,
                  py::array_t<double> &values) {
-                std::vector<double *> pointer_values;
-                ParseNumpyDataToVector(values, pointer_values);
+                // Should we even do this error checking?
+                double *pointer = ParseNumpyData(values);
 
-                return myself.AddResidualBlock(cost, loss, pointer_values[0]);
-              }, py::return_value_policy::reference);
+                return myself.AddResidualBlock(cost, loss, pointer);
+              }, py::keep_alive<1, 2>(), // CostFunction
+              py::keep_alive<1, 3>(), // LossFunction
+              py::return_value_policy::reference);
+
   problem.def("AddResidualBlock",
               [](ceres::Problem &myself,
                  ceres::CostFunction *cost,
@@ -422,14 +432,35 @@ PYBIND11_MODULE(PyCeres, m) {
                  py::array_t<double> &values1,
                  py::array_t<double> &values2) {
                 std::vector<double *> pointer_values;
-                ParseNumpyDataToVector(values1, pointer_values);
-                ParseNumpyDataToVector(values2, pointer_values);
+                double *pointer1 = ParseNumpyData(values1);
+                double *pointer2 = ParseNumpyData(values2);
 
                 return myself.AddResidualBlock(cost,
                                                loss,
-                                               pointer_values[0],
-                                               pointer_values[1]);
-              }, py::keep_alive<1, 2>(), py::return_value_policy::reference);
+                                               pointer1,
+                                               pointer2);
+              },
+              py::keep_alive<1, 2>(), // Cost Function
+              py::keep_alive<1, 3>(), // Loss Function
+              py::return_value_policy::reference);
+
+  problem.def("AddResidualBlock",
+              [](ceres::Problem &myself,
+                 ceres::CostFunction *cost,
+                 ceres::LossFunction *loss,
+                 std::vector<py::array_t<double>> &values) {
+                std::vector<double *> pointer_values;
+                for (int idx = 0; idx < values.size(); ++idx) {
+                  pointer_values.push_back(ParseNumpyData(values[idx]));
+                }
+
+                return myself.AddResidualBlock(cost,
+                                               loss,
+                                               pointer_values);
+              },
+              py::keep_alive<1, 2>(), // Cost Function
+              py::keep_alive<1, 3>(), // Loss Function
+              py::return_value_policy::reference);
 
   py::class_<ceres::Solver::Options> solver_options(m, "SolverOptions");
   using s_options=ceres::Solver::Options;
@@ -611,9 +642,11 @@ PYBIND11_MODULE(PyCeres, m) {
 
 
   // The main Solve function
-  m.def("Solve", overload_cast_<const ceres::Solver::Options &,
-                                ceres::Problem *,
-                                ceres::Solver::Summary *>()(&ceres::Solve),py::call_guard<py::gil_scoped_release>());
+  m.def("Solve",
+        overload_cast_<const ceres::Solver::Options &,
+                       ceres::Problem *,
+                       ceres::Solver::Summary *>()(&ceres::Solve),
+        py::call_guard<py::gil_scoped_release>());
 
   add_pybinded_ceres_examples(m);
   add_custom_cost_functions(m);
