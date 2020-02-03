@@ -255,7 +255,7 @@ their tensor/numpy arrays.
 Custom Cost functions work
 
 ## LICENSE
-Same as Ceres New BSD 2.
+Same as Ceres New BSD.
 
 ## Credit
 This is just a wrapper over the hard work of the main 
