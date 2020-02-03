@@ -19,7 +19,7 @@ git submodule init
 git submodule update
 ```
 
-Copy and paste the **ceres_python_bindings** directory to your ceres-solver directory.
+Copy and paste the *ceres_python_bindings* directory to your ceres-solver directory.
 Your ceres directory should now look something like this.
   ```
   ceres-solver/
@@ -35,7 +35,7 @@ Your ceres directory should now look something like this.
   │   └── AddToCeres.cmake - file to include in Ceres CMakeLists.txt
 ```
 
-Open up your **ceres-solver/CMakeLists.txt** and add the following to the end
+Open up your *ceres-solver/CMakeLists.txt* and add the following to the end
 of the file.
 
 ```
@@ -94,7 +94,7 @@ pass to the AddResidualBlock() function is a numpy array.
 
 ### Basic HelloWorld
 
-Code for this example can be found in **python_tests/ceres_hello_world_example.py**
+Code for this example can be found in *python_tests/ceres_hello_world_example.py*
 
 This example is the same as the hello world example from Ceres. 
 
@@ -200,10 +200,27 @@ void add_custom_cost_functions(py::module &m) {
 
 ```
 
-We provide a basic example of this in **custom_cpp_cost_functions.cpp**. 
+We provide a basic example of this in *custom_cpp_cost_functions.cpp*. 
 Note you are responsible for ensuring that all the dependencies and includes are
 set correctly for your library.
 
+### Running examples
+We provide a couple examples of how to use the library under *./python_tests*.
+They all assume the wrappers were built alongside Ceres for the PyCeres library.
+If you did not do this then you need to set the *PYCERES_LOCATION* environment
+variable. 
+
+You need the following python libs to run these examples.
+
+**Required:**
+ 
+* numpy
+
+**Optional:**
+
+* pytest
+* jax
+ 
 
 ## Warnings:
 
@@ -213,6 +230,8 @@ the concept of giving away ownership of memory. So it may try to delete somethin
 that Ceres still believes is valid.
 * Careful with wrapping AutodiffCostfunction. It takes over the memory of a cost
 functor which can cause errors.
+* Python has **GIL**. Therefore cost functions written in Python have a fundamental
+slowdown, and can't be truly multithreaded.
 
 
 ## TODOs
@@ -229,10 +248,11 @@ go through the CostFunction( something like in the C api).
 - [ ] Evaluate speed of Python Cost Function vs C++
 - [ ] Clean up AddResidualBlock() and set up the correct error checks
 - [ ] Figure out how google log should work with Python
-- [ ] Figure out if we can somehow use Jax numpy arrays
-
-
-
+- [ ] Figure out if Jax or PyTorch could somehow be integrated so that we use
+their tensor/numpy arrays.
 
 ## Status
 Custom Cost functions work
+
+## Credit
+This is just a wrapper over the hard work of the main [Ceres](http://ceres-solver.org/) project.
