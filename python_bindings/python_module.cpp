@@ -613,7 +613,7 @@ PYBIND11_MODULE(PyCeres, m) {
   // The main Solve function
   m.def("Solve", overload_cast_<const ceres::Solver::Options &,
                                 ceres::Problem *,
-                                ceres::Solver::Summary *>()(&ceres::Solve));
+                                ceres::Solver::Summary *>()(&ceres::Solve),py::call_guard<py::gil_scoped_release>());
 
   add_pybinded_ceres_examples(m);
   add_custom_cost_functions(m);
