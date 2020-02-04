@@ -133,7 +133,6 @@ print(summary.BriefReport() + " \n")
 print( "x : " + str(initial_x) + " -> " + str(x) + "\n")
 ```
 
-
 ### CostFunction in Python
 
 This library allows you to create your own custom CostFunction in Python to be
@@ -228,6 +227,9 @@ You need the following python libs to run these examples.
 when using it from Python. The main problem is that Python does not really have
 the concept of giving away ownership of memory. So it may try to delete something
 that Ceres still believes is valid.
+    * I think for most stuff I setup the proper procedures that this doesn't happen (
+    e.g Ceres::Problem by default has Ownership turned off, cost_function can't be deleted
+    until Problem is ,...) . But you never know what I missed.
 * Careful with wrapping AutodiffCostfunction. It takes over the memory of a cost
 functor which can cause errors.
 * Python has **GIL**. Therefore cost functions written in Python have a fundamental
