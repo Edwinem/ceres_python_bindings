@@ -30,6 +30,6 @@ if (EIGEN3_FOUND)
     include_directories(${EIGEN3_INCLUDE_DIR})
 endif()
 
-target_link_libraries(PyCeres PRIVATE ${CERES_FOLDER}/build/lib/libceres.a -lglog -llapack -lcxsparse)
+target_link_libraries(PyCeres PRIVATE ${CERES_FOLDER}/build_debug/lib/libceres-debug.a -lglog -llapack -lcxsparse)
 
 #add_executable(ceres_bindings main.cpp python_bindings/python_module.cpp)

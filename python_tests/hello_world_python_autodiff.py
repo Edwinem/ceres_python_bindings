@@ -18,7 +18,7 @@ sys.path.insert(0, pyceres_location)
 
 import PyCeres  # Import the Python Bindings
 import numpy as np
-from jax import grad, jit, vmap
+from jax import grad
 
 
 def residual_calc(param_input):

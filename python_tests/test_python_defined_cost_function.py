@@ -14,7 +14,6 @@ import PyCeres  # Import the Python Bindings
 import numpy as np
 import pytest
 
-
 class PythonCostFunc(PyCeres.CostFunction):
     def __init__(self):
         super().__init__()
@@ -62,4 +61,5 @@ def RunBasicProblem():
 def test_cost():
     cost=RunBasicProblem()
     assert pytest.approx(0.0, 1e-10) == cost
+
 

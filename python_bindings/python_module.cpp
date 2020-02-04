@@ -80,6 +80,8 @@ class PyCostFunction : public ceres::CostFunction {
   bool Evaluate(double const *const *parameters,
                 double *residuals,
                 double **jacobians) const override {
+    pybind11::gil_scoped_acquire gil;
+
     // Resize the vectors passed to python to the proper size. And set the
     // pointer values
     if (!cached_flag) {
@@ -126,7 +128,6 @@ class PyCostFunction : public ceres::CostFunction {
       }
     }
 
-    pybind11::gil_scoped_acquire gil;
     pybind11::function overload =
         pybind11::get_overload(static_cast<const ceres::CostFunction *>(this),
                                "Evaluate");
@@ -144,14 +145,6 @@ class PyCostFunction : public ceres::CostFunction {
             nullptr);
         return pybind11::detail::cast_safe<bool>(std::move(o));
       }
-
-      // I believe we don't need this as we are returning a bool
-//      if (pybind11::detail::cast_is_temporary_value_reference<bool>::value) {
-//        static pybind11::detail::overload_caster_t<bool> caster;
-//        return pybind11::detail::cast_ref<bool>(std::move(o), caster);
-//      } else
-
-
     }
     pybind11::pybind11_fail("Tried to call pure virtual function \"" PYBIND11_STRINGIFY(
         Ceres::CostFunction) "::" "Evaluate \"");
@@ -200,6 +193,86 @@ class PyEvaluationCallBack : public ceres::EvaluationCallback {
 
 };
 
+class PyFirstOrderFunction : public ceres::FirstOrderFunction {
+ public:
+  /* Inherit the constructors */
+  using ceres::FirstOrderFunction::FirstOrderFunction;
+
+  int NumParameters() const override {
+    pybind11::gil_scoped_acquire gil;
+    pybind11::function overload =
+        pybind11::get_overload(static_cast<const ceres::FirstOrderFunction *>(this),
+                               "NumParameters");
+    if (overload) {
+      auto o = overload();
+      return pybind11::detail::cast_safe<int>(std::move(o));
+    }
+
+    pybind11::pybind11_fail("Tried to call pure virtual function \"" PYBIND11_STRINGIFY(
+        ceres::FirstOrderFunction) "::" "NumParameters \"");
+  }
+
+  bool Evaluate(const double *const parameters,
+                double *cost,
+                double *gradient) const override {
+    pybind11::gil_scoped_acquire gil;
+    if (!cached_flag) {
+      parameters_wrap = py::array_t<double>(NumParameters(), parameters, dummy);
+      gradient_wrap = py::array_t<double>(NumParameters(), gradient, dummy);
+      cost_wrap = py::array_t<double>(1, cost, dummy);
+      cached_flag = true;
+    }
+
+    // Check if the pointers have change and if they have then change them
+    auto info = cost_wrap.request(true);
+    if (info.ptr != cost) {
+      cost_wrap = py::array_t<double>(1, cost, dummy);
+    }
+    info = parameters_wrap.request(true);
+    if (info.ptr != parameters) {
+      parameters_wrap = py::array_t<double>(NumParameters(), parameters, dummy);
+    }
+    if (gradient) {
+      info = gradient_wrap.request(true);
+      if (info.ptr != gradient) {
+        gradient_wrap = py::array_t<double>(NumParameters(), gradient, dummy);
+      }
+    }
+    pybind11::function overload =
+        pybind11::get_overload(static_cast<const ceres::FirstOrderFunction *>(this),
+                               "Evaluate");
+    if (overload) {
+      if (gradient) {
+        auto o = overload.operator()<pybind11::return_value_policy::reference>(
+            parameters_wrap,
+            cost_wrap,
+            gradient_wrap);
+        return pybind11::detail::cast_safe<bool>(std::move(o));
+      } else {
+        auto o = overload.operator()<pybind11::return_value_policy::reference>(
+            parameters_wrap,
+            cost_wrap,
+            nullptr);
+        return pybind11::detail::cast_safe<bool>(std::move(o));
+      }
+    }
+    pybind11::pybind11_fail("Tried to call pure virtual function \"" PYBIND11_STRINGIFY(
+        ceres::FirstOrderFunction) "::" "Evaluate \"");
+  }
+
+ private:
+  // Numpy arrays to pass to python that wrap the pointers
+  // Mutable so they can be modified by the const function.
+  mutable py::array_t<double> parameters_wrap;
+  mutable py::array_t<double> gradient_wrap;
+  mutable bool cached_flag = false; // Flag used to determine if the vectors
+  // need to be resized
+  mutable py::array_t<double> cost_wrap; // Buffer to contain the cost ptr
+  mutable py::str dummy; // Dummy variable for pybind11 so it doesn't make a
+  // copy
+
+};
+
 class PyIterationCallback : public ceres::IterationCallback {
  public:
   /* Inherit the constructors */
@@ -214,6 +287,26 @@ class PyIterationCallback : public ceres::IterationCallback {
     );
   }
 
+};
+
+class FirstOrderFunctionWrapper : public ceres::FirstOrderFunction {
+ public:
+  explicit FirstOrderFunctionWrapper(FirstOrderFunction *real_function)
+      : function_(
+      real_function) {
+
+  }
+  bool Evaluate(const double *const parameters,
+                double *cost,
+                double *gradient) const override {
+    return function_->Evaluate(parameters, cost, gradient);
+  }
+  int NumParameters() const override {
+    return function_->NumParameters();
+  }
+
+ private:
+  FirstOrderFunction *function_;
 };
 
 // Parses a numpy array and extracts the pointer to the first element.
@@ -639,7 +732,89 @@ PYBIND11_MODULE(PyCeres, m) {
                                                         "EvaluationCallback")
       .def(py::init<>());
 
+  py::class_<ceres::FirstOrderFunction,
+             PyFirstOrderFunction /* <--- trampoline*/>(m,
+                                                        "FirstOrderFunction")
+      .def(py::init<>());
 
+  py::class_<ceres::GradientProblem> grad_problem(m, "GradientProblem");
+  grad_problem.def(py::init([](ceres::FirstOrderFunction *func) {
+    ceres::FirstOrderFunction *wrap = new FirstOrderFunctionWrapper(func);
+    return ceres::GradientProblem(wrap);
+  }), py::keep_alive<1, 2>() // FirstOrderFunction
+  );
+
+  grad_problem.def("NumParameters", &ceres::GradientProblem::NumParameters);
+
+  py::class_<ceres::GradientProblemSolver::Options>
+      grad_options(m, "GradientProblemOptions");
+  using g_options=ceres::GradientProblemSolver::Options;
+  grad_options.def(py::init<>());
+  grad_options.def("IsValid", &g_options::IsValid);
+  grad_options.def_readwrite("line_search_direction_type",
+                             &g_options::line_search_direction_type);
+  grad_options.def_readwrite("line_search_type",
+                             &g_options::line_search_type);
+  grad_options.def_readwrite("nonlinear_conjugate_gradient_type",
+                             &g_options::nonlinear_conjugate_gradient_type);
+  grad_options.def_readwrite("max_lbfgs_rank", &g_options::max_lbfgs_rank);
+  grad_options.def_readwrite("use_approximate_eigenvalue_bfgs_scaling",
+                             &g_options::use_approximate_eigenvalue_bfgs_scaling);
+  grad_options.def_readwrite("line_search_interpolation_type",
+                             &g_options::line_search_interpolation_type);
+  grad_options.def_readwrite("min_line_search_step_size",
+                             &g_options::min_line_search_step_size);
+  grad_options.def_readwrite("line_search_sufficient_function_decrease",
+                             &g_options::line_search_sufficient_function_decrease);
+  grad_options.def_readwrite("max_line_search_step_contraction",
+                             &g_options::max_line_search_step_contraction);
+  grad_options.def_readwrite("min_line_search_step_contraction",
+                             &g_options::min_line_search_step_contraction);
+  grad_options.def_readwrite("max_num_line_search_step_size_iterations",
+                             &g_options::max_num_line_search_step_size_iterations);
+  grad_options.def_readwrite("max_num_line_search_direction_restarts",
+                             &g_options::max_num_line_search_direction_restarts);
+  grad_options.def_readwrite("line_search_sufficient_curvature_decrease",
+                             &g_options::line_search_sufficient_curvature_decrease);
+  grad_options.def_readwrite("max_line_search_step_expansion",
+                             &g_options::max_line_search_step_expansion);
+  grad_options.def_readwrite("max_num_iterations",
+                             &g_options::max_num_iterations);
+  grad_options.def_readwrite("max_solver_time_in_seconds",
+                             &g_options::max_solver_time_in_seconds);
+  grad_options.def_readwrite("function_tolerance",
+                             &g_options::function_tolerance);
+  grad_options.def_readwrite("gradient_tolerance",
+                             &g_options::gradient_tolerance);
+  grad_options.def_readwrite("parameter_tolerance",
+                             &g_options::parameter_tolerance);
+  grad_options.def_readwrite("minimizer_progress_to_stdout",
+                             &g_options::minimizer_progress_to_stdout);
+
+  py::class_<ceres::GradientProblemSolver::Summary>
+      grad_summary(m, "GradientProblemSummary");
+  using g_sum=ceres::GradientProblemSolver::Summary;
+  grad_summary.def(py::init<>());
+  grad_summary.def("BriefReport",
+                   &ceres::GradientProblemSolver::Summary::BriefReport);
+  grad_summary.def("FullReport",
+                   &ceres::GradientProblemSolver::Summary::FullReport);
+  grad_summary.def("IsSolutionUsable",
+                   &ceres::GradientProblemSolver::Summary::IsSolutionUsable);
+  grad_summary.def_readwrite("initial_cost",
+                             &ceres::GradientProblemSolver::Summary::initial_cost);
+  grad_summary.def_readwrite("final_cost",
+                             &ceres::GradientProblemSolver::Summary::final_cost);
+
+  // GradientProblem Solve
+  m.def("Solve", [](const ceres::GradientProblemSolver::Options &options,
+                    const ceres::GradientProblem &problem,
+                    py::array_t<double> &np_params,
+                    ceres::GradientProblemSolver::Summary *summary) {
+    double *param_ptr = ParseNumpyData(np_params);
+    py::gil_scoped_release release;
+    ceres::Solve(options, problem, param_ptr, summary);
+  });
 
   // The main Solve function
   m.def("Solve",

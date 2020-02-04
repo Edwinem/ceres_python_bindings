@@ -18,3 +18,8 @@ problem. This is done with the py::keep_alive<> command for AddResidualBlock
 * End user must call super().__init__() on custom CostFunctions define in
 Python. If this is not done then the Base Class CostFunction is never
 initialized.
+* Seems like as soon as you start touching python stuff like the py::array you 
+need to ensure that you have the GIL. The trampoline classes CostFunction would
+crash unless the gil was put as the first line. (Ahh the bug starting occuring
+because I put release GIL in the Solve functions. Before I had this the GIL was
+held and therefore there was no crash)
