@@ -554,6 +554,15 @@ PYBIND11_MODULE(PyCeres, m) {
   residual_block.def("index", &ceres::internal::ResidualBlock::index);
   residual_block.def("ToString", &ceres::internal::ResidualBlock::ToString);
 
+  py::class_<ceres::Problem::EvaluateOptions>(m, "EvaluateOptions")
+      .def(py::init<>())
+          // Doesn't make sense to wrap this as you can't see the pointers in python
+          //.def_readwrite("parameter_blocks",&ceres::Problem::EvaluateOptions)
+      .def_readwrite("apply_loss_function",
+                     &ceres::Problem::EvaluateOptions::apply_loss_function)
+      .def_readwrite("num_threads",
+                     &ceres::Problem::EvaluateOptions::num_threads);
+
   py::class_<ceres::Problem> problem(m, "Problem");
   problem.def(py::init(&CreatePythonProblem));
   problem.def(py::init<ceres::Problem::Options>());
@@ -562,6 +571,80 @@ PYBIND11_MODULE(PyCeres, m) {
   problem.def("NumResidualBlocks", &ceres::Problem::NumResidualBlocks);
   problem.def("NumResiduals", &ceres::Problem::NumResiduals);
   problem.def("ParameterBlockSize", &ceres::Problem::ParameterBlockSize);
+  problem.def("SetParameterBlockConstant",
+              [](ceres::Problem &myself, py::array_t<double> &np_arr) {
+                py::buffer_info info = np_arr.request();
+                myself.SetParameterBlockConstant((double *) info.ptr);
+              });
+  problem.def("SetParameterBlockVariable",
+              [](ceres::Problem &myself, py::array_t<double> &np_arr) {
+                py::buffer_info info = np_arr.request();
+                myself.SetParameterBlockVariable((double *) info.ptr);
+              });
+  problem.def("IsParameterBlockConstant",
+              [](ceres::Problem &myself, py::array_t<double> &np_arr) {
+                py::buffer_info info = np_arr.request();
+                myself.IsParameterBlockConstant((double *) info.ptr);
+              });
+  problem.def("SetParameterLowerBound",
+              [](ceres::Problem &myself,
+                 py::array_t<double> &np_arr,
+                 int index,
+                 double lower_bound) {
+                py::buffer_info info = np_arr.request();
+                myself.SetParameterLowerBound((double *) info.ptr,
+                                              index,
+                                              lower_bound);
+              });
+  problem.def("SetParameterUpperBound",
+              [](ceres::Problem &myself,
+                 py::array_t<double> &np_arr,
+                 int index,
+                 double upper_bound) {
+                py::buffer_info info = np_arr.request();
+                myself.SetParameterUpperBound((double *) info.ptr,
+                                              index,
+                                              upper_bound);
+              });
+  problem.def("GetParameterLowerBound",
+              [](ceres::Problem &myself,
+                 py::array_t<double> &np_arr,
+                 int index) {
+                py::buffer_info info = np_arr.request();
+                return myself.GetParameterLowerBound((double *) info.ptr,
+                                                     index);
+              });
+  problem.def("GetParameterUpperBound",
+              [](ceres::Problem &myself,
+                 py::array_t<double> &np_arr,
+                 int index) {
+                py::buffer_info info = np_arr.request();
+                return myself.GetParameterUpperBound((double *) info.ptr,
+                                                     index);
+              });
+  problem.def("GetParameterization",
+              [](ceres::Problem &myself, py::array_t<double> &np_arr) {
+                py::buffer_info info = np_arr.request();
+                myself.GetParameterization((double *) info.ptr);
+              });
+  problem.def("SetParameterization",
+              [](ceres::Problem &myself,
+                 py::array_t<double> &np_arr,
+                 ceres::LocalParameterization *local_parameterization) {
+                py::buffer_info info = np_arr.request();
+                myself.SetParameterization((double *) info.ptr,
+                                           local_parameterization);
+              });
+  problem.def("ParameterBlockSize",
+              [](ceres::Problem &myself, py::array_t<double> &np_arr) {
+                py::buffer_info info = np_arr.request();
+                return myself.ParameterBlockSize((double *) info.ptr);
+              });
+  problem.def("HasParameterBlock",
+              [](ceres::Problem &myself, py::array_t<double> &np_arr) {
+                py::buffer_info info = np_arr.request();
+                return myself.HasParameterBlock((double *) info.ptr);
+              });
   //problem.def("HasParameterBlock",&ceres::Problem::HasParameterBlock);
 
 
@@ -601,6 +684,99 @@ PYBIND11_MODULE(PyCeres, m) {
               py::keep_alive<1, 2>(), // Cost Function
               py::keep_alive<1, 3>(), // Loss Function
               py::return_value_policy::reference);
+  problem.def("AddResidualBlock",
+              [](ceres::Problem &myself,
+                 ceres::CostFunction *cost,
+                 ceres::LossFunction *loss,
+                 py::array_t<double> &values1,
+                 py::array_t<double> &values2) {
+                double *pointer1 = ParseNumpyData(values1);
+                double *pointer2 = ParseNumpyData(values2);
+                return myself.AddResidualBlock(cost, loss, pointer1, pointer2);
+              },
+              py::keep_alive<1, 2>(), // Cost Function
+              py::keep_alive<1, 3>(), // Loss Function
+              py::return_value_policy::reference);
+  problem.def("AddResidualBlock",
+              [](ceres::Problem &myself,
+                 ceres::CostFunction *cost,
+                 ceres::LossFunction *loss,
+                 py::array_t<double> &values1,
+                 py::array_t<double> &values2) {
+                double *pointer1 = ParseNumpyData(values1);
+                double *pointer2 = ParseNumpyData(values2);
+                return myself.AddResidualBlock(cost, loss, pointer1, pointer2);
+              },
+              py::keep_alive<1, 2>(), // Cost Function
+              py::keep_alive<1, 3>(), // Loss Function
+              py::return_value_policy::reference);
+  problem.def("AddResidualBlock",
+              [](ceres::Problem &myself,
+                 ceres::CostFunction *cost,
+                 ceres::LossFunction *loss,
+                 py::array_t<double> &values1,
+                 py::array_t<double> &values2,
+                 py::array_t<double> &values3) {
+                double *pointer1 = ParseNumpyData(values1);
+                double *pointer2 = ParseNumpyData(values2);
+                double *pointer3 = ParseNumpyData(values3);
+                return myself.AddResidualBlock(cost,
+                                               loss,
+                                               pointer1,
+                                               pointer2,
+                                               pointer3);
+              },
+              py::keep_alive<1, 2>(), // Cost Function
+              py::keep_alive<1, 3>(), // Loss Function
+              py::return_value_policy::reference);
+  problem.def("AddResidualBlock",
+              [](ceres::Problem &myself,
+                 ceres::CostFunction *cost,
+                 ceres::LossFunction *loss,
+                 py::array_t<double> &values1,
+                 py::array_t<double> &values2,
+                 py::array_t<double> &values3,
+                 py::array_t<double> &values4) {
+                double *pointer1 = ParseNumpyData(values1);
+                double *pointer2 = ParseNumpyData(values2);
+                double *pointer3 = ParseNumpyData(values3);
+                double *pointer4 = ParseNumpyData(values4);
+                return myself.AddResidualBlock(cost,
+                                               loss,
+                                               pointer1,
+                                               pointer2,
+                                               pointer3,
+                                               pointer4);
+              },
+              py::keep_alive<1, 2>(), // Cost Function
+              py::keep_alive<1, 3>(), // Loss Function
+              py::return_value_policy::reference);
+
+  problem.def("AddResidualBlock",
+              [](ceres::Problem &myself,
+                 ceres::CostFunction *cost,
+                 ceres::LossFunction *loss,
+                 py::array_t<double> &values1,
+                 py::array_t<double> &values2,
+                 py::array_t<double> &values3,
+                 py::array_t<double> &values4,
+                 py::array_t<double> &values5) {
+                double *pointer1 = ParseNumpyData(values1);
+                double *pointer2 = ParseNumpyData(values2);
+                double *pointer3 = ParseNumpyData(values3);
+                double *pointer4 = ParseNumpyData(values4);
+                double *pointer5 = ParseNumpyData(values5);
+                return myself.AddResidualBlock(cost,
+                                               loss,
+                                               pointer1,
+                                               pointer2,
+                                               pointer3,
+                                               pointer4,
+                                               pointer5);
+              },
+              py::keep_alive<1, 2>(), // Cost Function
+              py::keep_alive<1, 3>(), // Loss Function
+              py::return_value_policy::reference);
 
   problem.def("AddResidualBlock",
               [](ceres::Problem &myself,
@@ -616,6 +792,36 @@ PYBIND11_MODULE(PyCeres, m) {
               py::keep_alive<1, 2>(), // Cost Function
               py::keep_alive<1, 3>(), // Loss Function
               py::return_value_policy::reference);
+
+  problem.def("AddParameterBlock",
+              [](ceres::Problem &myself,
+                 py::array_t<double> &values, int size) {
+                double *pointer = ParseNumpyData(values);
+                myself.AddParameterBlock(pointer, size);
+              });
+
+  problem.def("AddParameterBlock",
+              [](ceres::Problem &myself,
+                 py::array_t<double> &values,
+                 int size,
+                 ceres::LocalParameterization *local_parameterization) {
+                double *pointer = ParseNumpyData(values);
+                myself.AddParameterBlock(pointer, size, local_parameterization);
+              }
+  );
+
+  problem.def("RemoveParameterBlock",
+              [](ceres::Problem &myself,
+                 py::array_t<double> &values) {
+                double *pointer = ParseNumpyData(values);
+                myself.RemoveParameterBlock(pointer);
+              });
+
+  problem.def("RemoveResidualBlock",
+              [](ceres::Problem &myself,
+                 ceres::ResidualBlockId residual_block_id) {
+                myself.RemoveResidualBlock(residual_block_id);
+              });
 
   py::class_<ceres::Solver::Options> solver_options(m, "SolverOptions");
   using s_options=ceres::Solver::Options;
