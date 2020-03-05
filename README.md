@@ -42,7 +42,7 @@ of the file.
 include(ceres_python_bindings/AddToCeres.cmake)
 ```
 
-Build Ceres as you would normally.
+Build Ceres as you would normally. To specifically build the bindings you should call _make PyCeres_ .
 
 ### Build seperately and link to Ceres
 
