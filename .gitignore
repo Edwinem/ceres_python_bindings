@@ -11,7 +11,6 @@ cmake-build-debug/*
 # C++ files
 *.a
 *.so
-*.so
 *.o
 
 # python files
@@ -51,6 +50,7 @@ scripts/\.vs/scripts/v15/\.suo
 *.dir
 *.pyproj
 *.csv
+*.pt
 
 
 

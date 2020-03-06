@@ -53,6 +53,7 @@ using overload_cast_ = pybind11::detail::overload_cast_impl<Args...>;
 // Forward decls for additionally modules
 void add_pybinded_ceres_examples(py::module &m);
 void add_custom_cost_functions(py::module &m);
+void add_torch_functionality(py::module& m);
 
 ceres::Problem CreatePythonProblem() {
   ceres::Problem::Options o;
@@ -658,7 +659,7 @@ PYBIND11_MODULE(PyCeres, m) {
 //                                                          const std::vector<
 //                                                              double *> &)) &ceres::Problem::AddResidualBlock);
 
-
+/*
   problem.def("AddResidualBlock",
               [](ceres::Problem &myself,
                  ceres::CostFunction *cost,
@@ -669,7 +670,7 @@ PYBIND11_MODULE(PyCeres, m) {
                 return myself.AddResidualBlock(cost, loss, pointer);
               }, py::keep_alive<1, 2>(), // CostFunction
               py::keep_alive<1, 3>(), // LossFunction
-              py::return_value_policy::reference);
+              py::return_value_policy::reference); */
 
   problem.def("AddResidualBlock",
               [](ceres::Problem &myself,
@@ -778,20 +779,20 @@ PYBIND11_MODULE(PyCeres, m) {
               py::keep_alive<1, 3>(), // Loss Function
               py::return_value_policy::reference);
 
-  problem.def("AddResidualBlock",
-              [](ceres::Problem &myself,
-                 ceres::CostFunction *cost,
-                 ceres::LossFunction *loss,
-                 std::vector<py::array_t<double>> &values) {
-                std::vector<double *> pointer_values;
-                for (int idx = 0; idx < values.size(); ++idx) {
-                  pointer_values.push_back(ParseNumpyData(values[idx]));
-                }
-                return myself.AddResidualBlock(cost, loss, pointer_values);
-              },
-              py::keep_alive<1, 2>(), // Cost Function
-              py::keep_alive<1, 3>(), // Loss Function
-              py::return_value_policy::reference);
+//  problem.def("AddResidualBlock",
+//              [](ceres::Problem &myself,
+//                 ceres::CostFunction *cost,
+//                 ceres::LossFunction *loss,
+//                 std::vector<py::array_t<double>> &values) {
+//                std::vector<double *> pointer_values;
+//                for (int idx = 0; idx < values.size(); ++idx) {
+//                  pointer_values.push_back(ParseNumpyData(values[idx]));
+//                }
+//                return myself.AddResidualBlock(cost, loss, pointer_values);
+//              },
+//              py::keep_alive<1, 2>(), // Cost Function
+//              py::keep_alive<1, 3>(), // Loss Function
+//              py::return_value_policy::reference);
 
   problem.def("AddParameterBlock",
               [](ceres::Problem &myself,
@@ -822,6 +823,7 @@ PYBIND11_MODULE(PyCeres, m) {
                  ceres::ResidualBlockId residual_block_id) {
                 myself.RemoveResidualBlock(residual_block_id);
               });
+
 
   py::class_<ceres::Solver::Options> solver_options(m, "SolverOptions");
   using s_options=ceres::Solver::Options;
@@ -1316,9 +1318,9 @@ PYBIND11_MODULE(PyCeres, m) {
   add_pybinded_ceres_examples(m);
   add_custom_cost_functions(m);
 
-
-
-
+#ifdef WITH_PYTORCH
+  add_torch_functionality(m);
+#endif
 
   // Untested
 
