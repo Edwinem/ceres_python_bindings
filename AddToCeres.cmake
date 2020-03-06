@@ -1,4 +1,5 @@
 
+
 include_directories(${PROJECT_SOURCE_DIR}/ceres_python_bindings/pybind11/include)
 include_directories(${PROJECT_SOURCE_DIR}/internal)
 
@@ -10,3 +11,5 @@ pybind11_add_module(PyCeres ${PROJECT_SOURCE_DIR}/ceres_python_bindings/python_b
 
 
 target_link_libraries(PyCeres PRIVATE ceres)
+
+message(STATUS "Python Bindings for Ceres(PyCeres) have been added")
