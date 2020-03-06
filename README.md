@@ -10,7 +10,7 @@ standalone, and is more error prone.
 ### Recommended: Build Alongside Ceres
 
 Clone the repository at https://github.com/Edwinem/ceres_python_bindings into 
-your ceres-solver folder.
+your *ceres-solver* folder.
 
 Initialize and download the pybind11 submodule
 ```shell
@@ -21,7 +21,7 @@ git submodule update
 ```
 
 If you cloned it somewhere else then you must now copy and paste the
- *ceres_python_bindings* directory to your ceres-solver directory.
+ *ceres_python_bindings* directory to your *ceres-solver* directory.
  
 Your ceres directory should now look something like this.
   ```
@@ -250,7 +250,7 @@ To enable this functionality you must do the following things.
     - The default PyTorch libs that you download from pip and other package managers
     is built with the old C++ ABI.
     
-Note this will break normal functionality as all Python instantiaons now requires
+Note this will break normal functionality as all Python instantiations now requires
 a *import Torch* before you import *PyCeres*.
 
 Currently the TorchScript is passed by serialized files. 

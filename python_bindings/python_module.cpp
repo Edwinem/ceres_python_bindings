@@ -646,20 +646,6 @@ PYBIND11_MODULE(PyCeres, m) {
                 py::buffer_info info = np_arr.request();
                 return myself.HasParameterBlock((double *) info.ptr);
               });
-  //problem.def("HasParameterBlock",&ceres::Problem::HasParameterBlock);
-
-
-//  problem.def("AddResidualBlock",
-//              (ceres::ResidualBlockId (ceres::Problem::*)(ceres::CostFunction *,
-//                                                          ceres::LossFunction *,
-//                                                          double *)) &ceres::Problem::AddResidualBlock);
-//  problem.def("AddResidualBlock",
-//              (ceres::ResidualBlockId (ceres::Problem::*)(ceres::CostFunction *,
-//                                                          ceres::LossFunction *,
-//                                                          const std::vector<
-//                                                              double *> &)) &ceres::Problem::AddResidualBlock);
-
-/*
   problem.def("AddResidualBlock",
               [](ceres::Problem &myself,
                  ceres::CostFunction *cost,
@@ -670,34 +656,8 @@ PYBIND11_MODULE(PyCeres, m) {
                 return myself.AddResidualBlock(cost, loss, pointer);
               }, py::keep_alive<1, 2>(), // CostFunction
               py::keep_alive<1, 3>(), // LossFunction
-              py::return_value_policy::reference); */
+              py::return_value_policy::reference);
 
-  problem.def("AddResidualBlock",
-              [](ceres::Problem &myself,
-                 ceres::CostFunction *cost,
-                 ceres::LossFunction *loss,
-                 py::array_t<double> &values1,
-                 py::array_t<double> &values2) {
-                double *pointer1 = ParseNumpyData(values1);
-                double *pointer2 = ParseNumpyData(values2);
-                return myself.AddResidualBlock(cost, loss, pointer1, pointer2);
-              },
-              py::keep_alive<1, 2>(), // Cost Function
-              py::keep_alive<1, 3>(), // Loss Function
-              py::return_value_policy::reference);
-  problem.def("AddResidualBlock",
-              [](ceres::Problem &myself,
-                 ceres::CostFunction *cost,
-                 ceres::LossFunction *loss,
-                 py::array_t<double> &values1,
-                 py::array_t<double> &values2) {
-                double *pointer1 = ParseNumpyData(values1);
-                double *pointer2 = ParseNumpyData(values2);
-                return myself.AddResidualBlock(cost, loss, pointer1, pointer2);
-              },
-              py::keep_alive<1, 2>(), // Cost Function
-              py::keep_alive<1, 3>(), // Loss Function
-              py::return_value_policy::reference);
   problem.def("AddResidualBlock",
               [](ceres::Problem &myself,
                  ceres::CostFunction *cost,
@@ -779,20 +739,20 @@ PYBIND11_MODULE(PyCeres, m) {
               py::keep_alive<1, 3>(), // Loss Function
               py::return_value_policy::reference);
 
-//  problem.def("AddResidualBlock",
-//              [](ceres::Problem &myself,
-//                 ceres::CostFunction *cost,
-//                 ceres::LossFunction *loss,
-//                 std::vector<py::array_t<double>> &values) {
-//                std::vector<double *> pointer_values;
-//                for (int idx = 0; idx < values.size(); ++idx) {
-//                  pointer_values.push_back(ParseNumpyData(values[idx]));
-//                }
-//                return myself.AddResidualBlock(cost, loss, pointer_values);
-//              },
-//              py::keep_alive<1, 2>(), // Cost Function
-//              py::keep_alive<1, 3>(), // Loss Function
-//              py::return_value_policy::reference);
+  problem.def("AddResidualBlock",
+              [](ceres::Problem &myself,
+                 ceres::CostFunction *cost,
+                 ceres::LossFunction *loss,
+                 std::vector<py::array_t<double>> &values) {
+                std::vector<double *> pointer_values;
+                for (int idx = 0; idx < values.size(); ++idx) {
+                  pointer_values.push_back(ParseNumpyData(values[idx]));
+                }
+                return myself.AddResidualBlock(cost, loss, pointer_values);
+              },
+              py::keep_alive<1, 2>(), // Cost Function
+              py::keep_alive<1, 3>(), // Loss Function
+              py::return_value_policy::reference);
 
   problem.def("AddParameterBlock",
               [](ceres::Problem &myself,
