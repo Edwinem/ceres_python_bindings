@@ -891,19 +891,21 @@ PYBIND11_MODULE(PyCeres, m) {
              }
            });
 
-  py::class_<ceres::TrivialLoss>(m, "TrivialLoss")
-      .def(py::init<>());
-
-  py::class_<ceres::HuberLoss>(m, "HuberLoss")
-      .def(py::init<double>());
-  py::class_<ceres::SoftLOneLoss>(m, "SoftLOneLoss")
-      .def(py::init<double>());
-
-  py::class_<ceres::CauchyLoss>(m, "CauchyLoss")
-      .def(py::init<double>());
-
   py::class_<ceres::LossFunction, PyLossFunction>(m, "LossFunction")
       .def(py::init<>());
+
+  py::class_<ceres::TrivialLoss, ceres::LossFunction>(m, "TrivialLoss")
+      .def(py::init<>());
+
+  py::class_<ceres::HuberLoss, ceres::LossFunction>(m, "HuberLoss")
+      .def(py::init<double>());
+
+  py::class_<ceres::SoftLOneLoss, ceres::LossFunction>(m, "SoftLOneLoss")
+      .def(py::init<double>());
+
+  py::class_<ceres::CauchyLoss, ceres::LossFunction>(m, "CauchyLoss")
+      .def(py::init<double>());
+
 
   py::class_<ceres::Solver::Summary> solver_summary(m, "Summary");
   using s_summary=ceres::Solver::Summary;
