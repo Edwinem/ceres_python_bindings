@@ -768,7 +768,8 @@ PYBIND11_MODULE(PyCeres, m) {
                  ceres::LocalParameterization *local_parameterization) {
                 double *pointer = ParseNumpyData(values);
                 myself.AddParameterBlock(pointer, size, local_parameterization);
-              }
+              },
+              py::keep_alive<1, 4>() // LocalParameterization
   );
 
   problem.def("RemoveParameterBlock",

@@ -45,7 +45,7 @@ of the file.
 include(ceres_python_bindings/AddToCeres.cmake)
 ```
 
-If everything was successful then when call *cmake* in your build folder at the
+If everything was successful then when you call *cmake* in your build folder at the
 end it should output 
 
 ```
@@ -55,7 +55,7 @@ end it should output
 Build Ceres as you would normally. To specifically build the bindings you should
  call _make PyCeres_ .
 
-### Build seperately and link to Ceres
+### Build separately and link to Ceres
 
 The CMakeLists.txt for this option still needs more work. For now you have to 
 modify it yourself and set the location of *libceres.a*.
