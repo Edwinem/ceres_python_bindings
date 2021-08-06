@@ -35,14 +35,15 @@
 #include <pybind11/numpy.h>
 #include <ceres/ceres.h>
 #include <ceres/normal_prior.h>
-
-// Needed due to forward decls
-#include <ceres/problem_impl.h>
-#include <ceres/residual_block.h>
-#include <ceres/parameter_block.h>
-
 #include <iostream>
 #include <string>
+
+// If the library is built by linking to ceres then we need to
+// access the defined compiler options(USE_SUITESPARSE,threading model
+// ...)
+#ifdef CERES_IS_LINKED
+#include<ceres/internal/port.h>
+#endif
 
 namespace py = pybind11;
 
@@ -53,8 +54,10 @@ using overload_cast_ = pybind11::detail::overload_cast_impl<Args...>;
 // Forward decls for additionally modules
 void add_pybinded_ceres_examples(py::module &m);
 void add_custom_cost_functions(py::module &m);
-void add_torch_functionality(py::module& m);
+void add_torch_functionality(py::module &m);
 
+// Function to create a ceres Problem with the default options that Ceres does
+// NOT take ownership. Needed since Python expects to own the memory.
 ceres::Problem CreatePythonProblem() {
   ceres::Problem::Options o;
   o.local_parameterization_ownership = ceres::Ownership::DO_NOT_TAKE_OWNERSHIP;
@@ -73,6 +76,8 @@ ceres::Problem::Options CreateNoOwnershipOption() {
   return o;
 }
 
+// Class which we can use to create a ceres::CostFunction in python.
+// This allows use to create python based cost functions.
 class PyCostFunction : public ceres::CostFunction {
  public:
   /* Inherit the constructors */
@@ -104,7 +109,7 @@ class PyCostFunction : public ceres::CostFunction {
 
     }
 
-    // Check if the pointers have change and if they have then change them
+    // Check if the pointers have changed and if they have then change them
     auto info = residuals_wrap.request(true);
     if (info.ptr != residuals) {
       residuals_wrap = py::array_t<double>(num_residuals(), residuals, dummy);
@@ -167,6 +172,7 @@ class PyCostFunction : public ceres::CostFunction {
 
 };
 
+// Trampoline class so that we can create a LossFunction in Python.
 class PyLossFunction : public ceres::LossFunction {
  public:
   /* Inherit the constructors */
@@ -178,6 +184,7 @@ class PyLossFunction : public ceres::LossFunction {
 
 };
 
+//
 class PyLocalParameterization : public ceres::LocalParameterization {
   /* Inherit the constructors */
   using ceres::LocalParameterization::LocalParameterization;
@@ -221,6 +228,7 @@ class PyLocalParameterization : public ceres::LocalParameterization {
 
 };
 
+// Trampoline class so we can create an EvaluationCallback in Python.
 class PyEvaluationCallBack : public ceres::EvaluationCallback {
  public:
   /* Inherit the constructors */
@@ -400,6 +408,11 @@ double *ParseNumpyData(py::array_t<double> &np_buf) {
       throw std::runtime_error(
           error_msg);
     }
+    if (info.itemsize != 8) {
+      std::string error_msg("Numpy vector must be of type double ");
+      throw std::runtime_error(
+          error_msg);
+    }
   }
   return (double *) info.ptr;
 }
@@ -519,7 +532,7 @@ PYBIND11_MODULE(PyCeres, m) {
       .value("CONSOLE", ceres::DumpFormatType::CONSOLE)
       .value("TEXTFILE", ceres::DumpFormatType::TEXTFILE);
 
-  using options=ceres::Problem::Options;
+  using options = ceres::Problem::Options;
   py::class_<ceres::Problem::Options> option(m, "ProblemOptions");
   option.def(py::init(&CreateNoOwnershipOption)); // Ensures default is that
   // Python manages memory
@@ -532,29 +545,6 @@ PYBIND11_MODULE(PyCeres, m) {
   option.def_readwrite("enable_fast_removal", &options::enable_fast_removal);
   option.def_readwrite("disable_all_safety_checks",
                        &options::disable_all_safety_checks);
-
-  py::class_<ceres::internal::ParameterBlock>
-      parameter_block(m, "ParameterBlock");
-  parameter_block.def(py::init<double *, int, int>());
-
-  py::class_<ceres::internal::ResidualBlock> residual_block(m, "ResidualBlock");
-  residual_block.def(py::init<const ceres::CostFunction *,
-                              const ceres::LossFunction *,
-                              const std::vector<ceres::internal::ParameterBlock *> &,
-                              int>());
-  residual_block.def("cost_function",
-                     &ceres::internal::ResidualBlock::cost_function,
-                     py::return_value_policy::reference);
-  residual_block.def("loss_function",
-                     &ceres::internal::ResidualBlock::loss_function,
-                     py::return_value_policy::reference);
-  residual_block.def("NumParameterBlocks",
-                     &ceres::internal::ResidualBlock::NumParameterBlocks);
-  residual_block.def("NumResiduals",
-                     &ceres::internal::ResidualBlock::NumResiduals);
-  residual_block.def("index", &ceres::internal::ResidualBlock::index);
-  residual_block.def("ToString", &ceres::internal::ResidualBlock::ToString);
-
   py::class_<ceres::Problem::EvaluateOptions>(m, "EvaluateOptions")
       .def(py::init<>())
           // Doesn't make sense to wrap this as you can't see the pointers in python
@@ -563,6 +553,21 @@ PYBIND11_MODULE(PyCeres, m) {
                      &ceres::Problem::EvaluateOptions::apply_loss_function)
       .def_readwrite("num_threads",
                      &ceres::Problem::EvaluateOptions::num_threads);
+
+  // Wrapper around ceres ResidualBlockID. In Ceres a ResidualBlockId is
+  // actually just a pointer to internal::ResidualBlock. However, since Ceres
+  // uses a forward declaration we don't actually have the type definition.
+  // (Ceres doesn't make it part of its public API). Since pybind11 needs a type
+  // we use this class instead which simply holds the pointer.
+  struct ResidualBlockIDWrapper {
+
+    ResidualBlockIDWrapper(const ceres::ResidualBlockId &id) : id(id) {
+
+    }
+    const ceres::ResidualBlockId id;
+  };
+
+  py::class_<ResidualBlockIDWrapper> residual_block_wrapper(m, "ResidualBlock");
 
   py::class_<ceres::Problem> problem(m, "Problem");
   problem.def(py::init(&CreatePythonProblem));
@@ -653,10 +658,9 @@ PYBIND11_MODULE(PyCeres, m) {
                  py::array_t<double> &values) {
                 // Should we even do this error checking?
                 double *pointer = ParseNumpyData(values);
-                return myself.AddResidualBlock(cost, loss, pointer);
+                return ResidualBlockIDWrapper(myself.AddResidualBlock(cost, loss, pointer));
               }, py::keep_alive<1, 2>(), // CostFunction
-              py::keep_alive<1, 3>(), // LossFunction
-              py::return_value_policy::reference);
+              py::keep_alive<1, 3>()); // LossFunction
 
   problem.def("AddResidualBlock",
               [](ceres::Problem &myself,
@@ -666,11 +670,10 @@ PYBIND11_MODULE(PyCeres, m) {
                  py::array_t<double> &values2) {
                 double *pointer1 = ParseNumpyData(values1);
                 double *pointer2 = ParseNumpyData(values2);
-                return myself.AddResidualBlock(cost, loss, pointer1, pointer2);
+                return ResidualBlockIDWrapper(myself.AddResidualBlock(cost, loss, pointer1, pointer2));
               },
               py::keep_alive<1, 2>(), // Cost Function
-              py::keep_alive<1, 3>(), // Loss Function
-              py::return_value_policy::reference);
+              py::keep_alive<1, 3>()); // Loss Function
   problem.def("AddResidualBlock",
               [](ceres::Problem &myself,
                  ceres::CostFunction *cost,
@@ -681,15 +684,14 @@ PYBIND11_MODULE(PyCeres, m) {
                 double *pointer1 = ParseNumpyData(values1);
                 double *pointer2 = ParseNumpyData(values2);
                 double *pointer3 = ParseNumpyData(values3);
-                return myself.AddResidualBlock(cost,
-                                               loss,
-                                               pointer1,
-                                               pointer2,
-                                               pointer3);
+                return ResidualBlockIDWrapper(myself.AddResidualBlock(cost,
+                                                                      loss,
+                                                                      pointer1,
+                                                                      pointer2,
+                                                                      pointer3));
               },
               py::keep_alive<1, 2>(), // Cost Function
-              py::keep_alive<1, 3>(), // Loss Function
-              py::return_value_policy::reference);
+              py::keep_alive<1, 3>());// Loss Function
   problem.def("AddResidualBlock",
               [](ceres::Problem &myself,
                  ceres::CostFunction *cost,
@@ -702,16 +704,15 @@ PYBIND11_MODULE(PyCeres, m) {
                 double *pointer2 = ParseNumpyData(values2);
                 double *pointer3 = ParseNumpyData(values3);
                 double *pointer4 = ParseNumpyData(values4);
-                return myself.AddResidualBlock(cost,
-                                               loss,
-                                               pointer1,
-                                               pointer2,
-                                               pointer3,
-                                               pointer4);
+                return ResidualBlockIDWrapper(myself.AddResidualBlock(cost,
+                                                                      loss,
+                                                                      pointer1,
+                                                                      pointer2,
+                                                                      pointer3,
+                                                                      pointer4));
               },
               py::keep_alive<1, 2>(), // Cost Function
-              py::keep_alive<1, 3>(), // Loss Function
-              py::return_value_policy::reference);
+              py::keep_alive<1, 3>()); // Loss Function
 
   problem.def("AddResidualBlock",
               [](ceres::Problem &myself,
@@ -727,17 +728,16 @@ PYBIND11_MODULE(PyCeres, m) {
                 double *pointer3 = ParseNumpyData(values3);
                 double *pointer4 = ParseNumpyData(values4);
                 double *pointer5 = ParseNumpyData(values5);
-                return myself.AddResidualBlock(cost,
-                                               loss,
-                                               pointer1,
-                                               pointer2,
-                                               pointer3,
-                                               pointer4,
-                                               pointer5);
+                return ResidualBlockIDWrapper(myself.AddResidualBlock(cost,
+                                                                      loss,
+                                                                      pointer1,
+                                                                      pointer2,
+                                                                      pointer3,
+                                                                      pointer4,
+                                                                      pointer5));
               },
               py::keep_alive<1, 2>(), // Cost Function
-              py::keep_alive<1, 3>(), // Loss Function
-              py::return_value_policy::reference);
+              py::keep_alive<1, 3>()); // Loss Function
 
   problem.def("AddResidualBlock",
               [](ceres::Problem &myself,
@@ -748,11 +748,10 @@ PYBIND11_MODULE(PyCeres, m) {
                 for (int idx = 0; idx < values.size(); ++idx) {
                   pointer_values.push_back(ParseNumpyData(values[idx]));
                 }
-                return myself.AddResidualBlock(cost, loss, pointer_values);
+                return ResidualBlockIDWrapper(myself.AddResidualBlock(cost, loss, pointer_values));
               },
               py::keep_alive<1, 2>(), // Cost Function
-              py::keep_alive<1, 3>(), // Loss Function
-              py::return_value_policy::reference);
+              py::keep_alive<1, 3>()); // Loss Function
 
   problem.def("AddParameterBlock",
               [](ceres::Problem &myself,
@@ -781,13 +780,12 @@ PYBIND11_MODULE(PyCeres, m) {
 
   problem.def("RemoveResidualBlock",
               [](ceres::Problem &myself,
-                 ceres::ResidualBlockId residual_block_id) {
-                myself.RemoveResidualBlock(residual_block_id);
+                 ResidualBlockIDWrapper &residual_block_id) {
+                myself.RemoveResidualBlock(residual_block_id.id);
               });
 
-
   py::class_<ceres::Solver::Options> solver_options(m, "SolverOptions");
-  using s_options=ceres::Solver::Options;
+  using s_options = ceres::Solver::Options;
   solver_options.def(py::init<>());
   solver_options.def("IsValid", &s_options::IsValid);
   solver_options.def_readwrite("minimizer_type", &s_options::minimizer_type);
@@ -907,9 +905,8 @@ PYBIND11_MODULE(PyCeres, m) {
   py::class_<ceres::CauchyLoss, ceres::LossFunction>(m, "CauchyLoss")
       .def(py::init<double>());
 
-
   py::class_<ceres::Solver::Summary> solver_summary(m, "Summary");
-  using s_summary=ceres::Solver::Summary;
+  using s_summary = ceres::Solver::Summary;
   solver_summary.def(py::init<>());
   solver_summary.def("BriefReport", &ceres::Solver::Summary::BriefReport);
   solver_summary.def("FullReport", &ceres::Solver::Summary::FullReport);
@@ -1028,7 +1025,7 @@ PYBIND11_MODULE(PyCeres, m) {
                                &s_summary::inner_iteration_ordering_used);
 
   py::class_<ceres::IterationSummary> iteration_summary(m, "IterationSummary");
-  using it_sum=ceres::IterationSummary;
+  using it_sum = ceres::IterationSummary;
   iteration_summary.def(py::init<>());
   iteration_summary.def_readonly("iteration", &it_sum::iteration);
   iteration_summary.def_readonly("step_is_valid", &it_sum::step_is_valid);
@@ -1109,7 +1106,7 @@ PYBIND11_MODULE(PyCeres, m) {
 
   py::class_<ceres::GradientProblemSolver::Options>
       grad_options(m, "GradientProblemOptions");
-  using g_options=ceres::GradientProblemSolver::Options;
+  using g_options = ceres::GradientProblemSolver::Options;
   grad_options.def(py::init<>());
   grad_options.def("IsValid", &g_options::IsValid);
   grad_options.def_readwrite("line_search_direction_type",
@@ -1154,7 +1151,7 @@ PYBIND11_MODULE(PyCeres, m) {
 
   py::class_<ceres::GradientProblemSolver::Summary>
       grad_summary(m, "GradientProblemSummary");
-  using g_sum=ceres::GradientProblemSolver::Summary;
+  using g_sum = ceres::GradientProblemSolver::Summary;
   grad_summary.def(py::init<>());
   grad_summary.def("BriefReport",
                    &ceres::GradientProblemSolver::Summary::BriefReport);
@@ -1252,7 +1249,7 @@ PYBIND11_MODULE(PyCeres, m) {
       .def("Create", &ceres::Context::Create);
 
   py::class_<ceres::Covariance::Options> cov_opt(m, "CovarianceOptions");
-  using c_opt=ceres::Covariance::Options;
+  using c_opt = ceres::Covariance::Options;
   cov_opt.def_readwrite("sparse_linear_algebra_library_type",
                         &c_opt::sparse_linear_algebra_library_type);
   cov_opt.def_readwrite("algorithm_type", &c_opt::algorithm_type);

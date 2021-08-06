@@ -3,9 +3,7 @@
 This project uses pybind11 to wrap Ceres with a python interface.
 
 ## Build Setup
-There are two different ways to build this library. The easiest and recommended
-way is to build it along with the Ceres library. The other way builds it 
-standalone, and is more error prone.
+There are different ways to build this library. The safest way is build it along with the Ceres library. 
 
 ### Recommended: Build Alongside Ceres
 
@@ -57,30 +55,48 @@ Build Ceres as you would normally. To specifically build the bindings you should
 
 ### Build separately and link to Ceres
 
-The CMakeLists.txt for this option still needs more work. For now you have to 
-modify it yourself and set the location of *libceres.a*.
+Note that these methods assume that you have built and installed the Ceres library. Either through `sudo apt-get `
+or by doing `make install`.
 
-Clone as you would normally.
+* You might have to modify the CMakeLists.txt to link to extra libraries such as suitesparse depending on how
+  your Ceres library was built.
 
-Run the standard cmake procedure.
+#### Normal Cmake
+
+Clone the project and initialize the submodules. Call cmake as you would normally.
 
 ```shell
 cd ceres_python_bindings
+git submodule init
+git submodule update
 mkdir build
 cd build
 cmake ..
 make
 ```
 
-Note this way has a couple of problems.
+#### Python setup.py
 
-* The *CMakelists.txt* must define some of Ceres's compile time flags such as the threading model, and
-it should match ,however, *libceres.a* was built. Else errors may occur.
-* You have to take care of linking the other libraries such as *suitesparse* and *glog*.
+This uses cmake-build-extension to call the cmake commands with python's setuptools.
 
-## How to 
+Activate your python virtual env. Within the *ceres_python_bindings* folder run `pip install .`. This will
+call the `setup.py` file and install PyCeres to your virtual environment.
 
-Assuming you built the library correctly you should now have a file called **PyCeres.so**. 
+If this fails then your best bet is to use the normal cmake method and debug from there.
+
+## How to import PyCeres
+
+### Built with setuptools
+If you used the `setup.py` with *pip* then the library should have been installed to your virtualenv, and you
+can simply install it with
+
+```python
+import PyCeres
+```
+
+### Built with cmake
+
+Somewhere a file called **PyCeres.so** should have been built. It should be in your build directory.
 It probably more likely looks something like this **PyCeres.cpython-36m-x86_64-linux-gnu.so**.
 Mark down the location of this file. This location is what you have to add to
 python **sys.path** in order to use the library. An example of how to do this can
@@ -96,8 +112,12 @@ After this you can now run
 ```python
 import PyCeres
 ```
-
 to utilize the library.
+
+Another option is to copy and paste the **PyCeres.so** file to your virtualenv/lib folder, which allows you to skip
+the sys path modifications.
+
+## How to use PyCeres
 
 You should peruse some of the examples listed below. It works almost exactly
 like Ceres in C++. The only care you have to take is that the parameters you 
@@ -105,43 +125,38 @@ pass to the AddResidualBlock() function is a numpy array.
 
 ### Basic HelloWorld
 
-Code for this example can be found in *python_tests/ceres_hello_world_example.py*
+Code for this example can be found in *examples/ceres_hello_world_example.py*
 
 This example is the same as the hello world example from Ceres. 
 
 ```python
-pyceres_location="../../build/lib" # assuming library was built along with ceres
-# and cmake directory is called build
-import sys
-sys.path.insert(0, pyceres_location)
-
-import PyCeres # Import the Python Bindings
+import PyCeres  # Import the Python Bindings
 import numpy as np
 
 # The variable to solve for with its initial value.
-initial_x=5.0
-x=np.array([initial_x]) # Requires the variable to be in a numpy array
+initial_x = 5.0
+x = np.array([initial_x])  # Requires the variable to be in a numpy array
 
 # Here we create the problem as in normal Ceres
-problem=PyCeres.Problem()
+problem = PyCeres.Problem()
 
-# Creates the CostFunction. This example uses a C++ wrapped function which 
+# Creates the CostFunction. This example uses a C++ wrapped function which
 # returns the Autodiffed cost function used in the C++ example
-cost_function=PyCeres.CreateHelloWorldCostFunction()
+cost_function = PyCeres.CreateHelloWorldCostFunction()
 
 # Add the costfunction and the parameter numpy array to the problem
-problem.AddResidualBlock(cost_function,None,x) 
+problem.AddResidualBlock(cost_function, None, x)
 
 # Setup the solver options as in normal ceres
-options=PyCeres.SolverOptions()
+options = PyCeres.SolverOptions()
 # Ceres enums live in PyCeres and require the enum Type
-options.linear_solver_type=PyCeres.LinearSolverType.DENSE_QR
-options.minimizer_progress_to_stdout=True
-summary=PyCeres.Summary()
+options.linear_solver_type = PyCeres.LinearSolverType.DENSE_QR
+options.minimizer_progress_to_stdout = True
+summary = PyCeres.Summary()
 # Solve as you would normally
-PyCeres.Solve(options,problem,summary)
+PyCeres.Solve(options, problem, summary)
 print(summary.BriefReport() + " \n")
-print( "x : " + str(initial_x) + " -> " + str(x) + "\n")
+print("x : " + str(initial_x) + " -> " + str(x) + "\n")
 ```
 
 ### CostFunction in Python
@@ -233,27 +248,7 @@ You need the following python libs to run these examples.
  
 
 ## Experimental PyTorch functionality
-**WARNING THIS IS CURRENTLY EXTREMELY EXPERIMENTAL**
 
-In order to bypass the fundamental slowness of Python (due to GIL and other factors). This
-library optionally provides the capability to utilize PyTorch's TorchScript.
-This allows you to define a CostFunction in Python, but bypass having to touch
-it when solving the Ceres::Problem.
-
-Right now the only the standalone version of this bindings support it. Lots of 
-the paths are hardcoded. So you will have to change them to.
-
-To enable this functionality you must do the following things.
-
-- Enable the option in cmake by turning on _WITH_PYTORCH_ 
-- Build Ceres and GLOG that you link to with _-D_GLIBCXX_USE_CXX11_ABI=0_
-    - The default PyTorch libs that you download from pip and other package managers
-    is built with the old C++ ABI.
-    
-Note this will break normal functionality as all Python instantiations now requires
-a *import Torch* before you import *PyCeres*.
-
-Currently the TorchScript is passed by serialized files. 
 
 
 ## Warnings:
@@ -267,7 +262,7 @@ that Ceres still believes is valid.
     until Problem is ,...) . But you never know what I missed.
 * Careful with wrapping AutodiffCostfunction. It takes over the memory of a cost
 functor which can cause errors.
-* Python has **GIL**. Therefore cost functions written in Python have a fundamental
+* Python has **GIL**. Therefore, cost functions written in Python have a fundamental
 slowdown, and can't be truly multithreaded.
 
 

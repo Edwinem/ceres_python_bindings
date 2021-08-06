@@ -1,14 +1,4 @@
-import os
-pyceres_location="" # Folder where the PyCeres lib is created
-if os.getenv('PYCERES_LOCATION'):
-    pyceres_location=os.getenv('PYCERES_LOCATION')
-else:
-    pyceres_location="../../build/lib" # If the environment variable is not set
-    # then it will assume this directory. Only will work if built with Ceres and
-    # through the normal mkdir build, cd build, cmake .. procedure
 
-import sys
-sys.path.insert(0, pyceres_location)
 import torch # Torch must be imported before PyCeres
 import PyCeres  # Import the Python Bindings
 

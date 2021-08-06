@@ -1,41 +1,36 @@
-'''
+"""
+Solves a g2o pose graph dataset using Ceres
 
-Example of using a basic cost function with autodiff provided by Jax
-
-'''
-
-import os
-pyceres_location="" # Folder where the PyCeres lib is created
-if os.getenv('PYCERES_LOCATION'):
-    pyceres_location=os.getenv('PYCERES_LOCATION')
-else:
-    pyceres_location="../../build/lib" # If the environment variable is not set
-    # then it will assume this directory. Only will work if built with Ceres and
-    # through the normal mkdir build, cd build, cmake .. procedure
-
-import sys
-sys.path.insert(0, pyceres_location)
-import torch
-import PyCeres  # Import the Python Bindings
+"""
+import PyCeres
 import numpy as np
 from jax import grad
 
 
-def residual_calc(param_input):
+def residual_calc():
     return 10 - param_input
 
 # function f(x) = 10 - x.
-class HelloWorldAutoDiff(PyCeres.CostFunction):
-    def __init__(self):
+class PoseResidual(PyCeres.CostFunction):
+    def __init__(self,dx,dy,dtheta):
         super().__init__()
-        self.set_num_residuals(1)
-        self.set_parameter_block_sizes([1])
+        self.set_num_residuals(3)
+        self.set_parameter_block_sizes([1,1,1,1,1,1])
+        self.dx=dx
+        self.dy=dy
+        self.dtheta=dtheta
+        self.sqrt_info=np.identity(3)*0.05
 
     def Evaluate(self,parameters, residuals, jacobians):
-        x=parameters[0][0]
-        print("Param is {}".format(x))
+        xa=parameters[0][0]
+        ya=parameters[1][0]
+        yaw_a=parameters[2][0]
+        xb=parameters[3][0]
+        yb=parameters[4][0]
+        yaw_b=parameters[5][0]
+
+
         residuals[0] = residual_calc(x)
-        print(residuals)
 
         if (jacobians!=None):
             jacobians[0][0] = grad(residual_calc)(x)

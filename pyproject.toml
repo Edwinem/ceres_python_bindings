@@ -1,0 +1,17 @@
+ [build-system]
+ requires = [
+     "wheel",
+     "setuptools>=45",
+     "setuptools_scm[toml]>=6.0",
+     "cmake_build_extension",
+     "numpy",
+     "pybind11",
+ ]
+ build-backend = "setuptools.build_meta"
+
+#[build-system]
+#requires = ["setuptools", "wheel", "scikit-build", "cmake", "ninja"]
+#build-backend = "setuptools.build_meta"
+#
+#[tool.pytest.ini_options]
+#testpaths = ["tests"]

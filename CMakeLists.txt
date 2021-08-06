@@ -1,44 +1,24 @@
 cmake_minimum_required(VERSION 3.02)
-project(ceres_python_bindings)
+project(PyCeres)
 
+set(CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 
-option(WITH_PYTORCH "Enables PyTorch defined Cost Functions" OFF)
+find_package(Ceres REQUIRED)
+find_package(Glog REQUIRED)
+find_package(LAPACK)
 
-if(${WITH_PYTORCH})
-    #PyTorch by default is build with old C++ ABI. So we use that option here
-    add_definitions(-D_GLIBCXX_USE_CXX11_ABI=0)
-    list(APPEND CMAKE_PREFIX_PATH "$ENV{HOME}/programming/python/env/lib/python3.6/site-packages/torch/share/cmake/Torch")
-    find_package(Torch REQUIRED)
-    include_directories(${TORCH_INCLUDE_DIRS})
+include_directories(${CERES_INCLUDE_DIR})
 
-    add_definitions("-DWITH_PYTORCH")
-endif(${WITH_PYTORCH})
-
-set(CERES_FOLDER $ENV{HOME}/programming/libs/ceres-solver)
-
-include_directories(${PROJECT_SOURCE_DIR}/pybind11/include)
-include_directories(${CERES_FOLDER}/include)
-include_directories(${CERES_FOLDER}/internal)
-
-include_directories(${CERES_FOLDER}/config)
-
-add_definitions(-DCERES_NO_THREADS)
-
-
-list(APPEND PYTORCH_FILES "")
-if(${WITH_PYTORCH})
-    list(APPEND PYTORCH_FILES python_bindings/pytorch_cost_function.h
-            python_bindings/pytorch_cost_function.cpp
-            python_bindings/pytorch_module.cpp)
-endif(${WITH_PYTORCH})
+# Since we are linking to ceres then we have to access the compile flags used to build it.
+add_definitions("-DCERES_IS_LINKED")
 
 add_subdirectory(pybind11)
 pybind11_add_module(PyCeres python_bindings/python_module.cpp
         python_bindings/ceres_examples_module.cpp
         python_bindings/custom_cpp_cost_functions.cpp
-        python_bindings/pytorch_cost_function.h
-        python_bindings/pytorch_cost_function.cpp
-        ${PYTORCH_FILES})
+#        python_bindings/pytorch_cost_function.h
+#        python_bindings/pytorch_cost_function.cpp
+        )
 
 find_package(Eigen3 3.3 CONFIG REQUIRED
         HINTS ${HOMEBREW_INCLUDE_DIR_HINTS})
@@ -54,11 +34,44 @@ if (EIGEN3_FOUND)
     include_directories(${EIGEN3_INCLUDE_DIR})
 endif()
 
-target_link_libraries(PyCeres PRIVATE ${CERES_FOLDER}/build/lib/libceres.a ${CERES_FOLDER}/glog/build/libglog.a -llapack -lcxsparse)
+target_link_libraries(PyCeres PRIVATE ${CERES_LIBRARY} ${GLOG_LIBRARY} ${LAPACK_LIBRARIES})
 
-if(${WITH_PYTORCH})
-    target_link_libraries(PyCeres PRIVATE "${TORCH_LIBRARIES}")
-    add_executable(torchscript tests/pytorch_test.cpp)
-    target_link_libraries(torchscript "${TORCH_LIBRARIES}")
-    set_property(TARGET torchscript PROPERTY CXX_STANDARD 14)
-endif(${WITH_PYTORCH})
+#############
+## Install ##
+#############
+
+install(
+        TARGETS PyCeres
+        EXPORT PyCeresTargets
+        LIBRARY DESTINATION ${CMAKE_INSTALL_PREFIX}
+        ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+        RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+        PUBLIC_HEADER DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
+
+# Install the exported targets
+install(
+        EXPORT PyCeresTargets
+        FILE PyCeresTargets.cmake
+        NAMESPACE PyCeres::
+        DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/PyCeres)
+
+
+set(PyCeres_BUILDDIR "${CMAKE_BINARY_DIR}/PyCeres")
+# For the python package we need an init file
+file(
+        GENERATE
+        OUTPUT "${PyCeres_BUILDDIR}/__init__.py"
+        CONTENT "from PyCeres.PyCeres import *\n")
+
+# Install the __init__.py file
+install(
+        FILES "${PyCeres_BUILDDIR}/__init__.py"
+        DESTINATION ${CMAKE_INSTALL_PREFIX})
+
+#install(
+#    TARGETS pybind11_bindings
+#    COMPONENT bindings
+#    LIBRARY DESTINATION ${MYMATH_INSTALL_PREFIX}
+#    ARCHIVE DESTINATION ${MYMATH_INSTALL_PREFIX}
+#    RUNTIME DESTINATION ${MYMATH_INSTALL_PREFIX})
+
