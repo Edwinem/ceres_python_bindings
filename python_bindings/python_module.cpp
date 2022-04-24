@@ -27,14 +27,13 @@
 //
 // Author: nikolausmitchell@gmail.com (Nikolaus Mitchell)
 
-
-
-#include <pybind11/pybind11.h>
-#include <pybind11/functional.h>
-#include <pybind11/stl.h>
-#include <pybind11/numpy.h>
 #include <ceres/ceres.h>
 #include <ceres/normal_prior.h>
+#include <pybind11/functional.h>
+#include <pybind11/numpy.h>
+#include <pybind11/pybind11.h>
+#include <pybind11/stl.h>
+
 #include <iostream>
 #include <string>
 
@@ -42,19 +41,19 @@
 // access the defined compiler options(USE_SUITESPARSE,threading model
 // ...)
 #ifdef CERES_IS_LINKED
-#include<ceres/internal/port.h>
+#include <ceres/internal/port.h>
 #endif
 
 namespace py = pybind11;
 
 // Used for overloaded functions in C++11
-template<typename... Args>
+template <typename... Args>
 using overload_cast_ = pybind11::detail::overload_cast_impl<Args...>;
 
 // Forward decls for additionally modules
-void add_pybinded_ceres_examples(py::module &m);
-void add_custom_cost_functions(py::module &m);
-void add_torch_functionality(py::module &m);
+void add_pybinded_ceres_examples(py::module& m);
+void add_custom_cost_functions(py::module& m);
+void add_torch_functionality(py::module& m);
 
 // Function to create a ceres Problem with the default options that Ceres does
 // NOT take ownership. Needed since Python expects to own the memory.
@@ -84,9 +83,9 @@ class PyCostFunction : public ceres::CostFunction {
   using ceres::CostFunction::CostFunction;
   using ceres::CostFunction::set_num_residuals;
 
-  bool Evaluate(double const *const *parameters,
-                double *residuals,
-                double **jacobians) const override {
+  bool Evaluate(double const* const* parameters,
+                double* residuals,
+                double** jacobians) const override {
     pybind11::gil_scoped_acquire gil;
 
     // Resize the vectors passed to python to the proper size. And set the
@@ -96,17 +95,14 @@ class PyCostFunction : public ceres::CostFunction {
       jacobians_vec.reserve(this->parameter_block_sizes().size());
       residuals_wrap = py::array_t<double>(num_residuals(), residuals, dummy);
       for (size_t idx = 0; idx < parameter_block_sizes().size(); ++idx) {
-        parameters_vec.emplace_back(py::array_t<double>(this->parameter_block_sizes()[idx],
-                                                        parameters[idx],
-                                                        dummy));
+        parameters_vec.emplace_back(py::array_t<double>(
+            this->parameter_block_sizes()[idx], parameters[idx], dummy));
         jacobians_vec.emplace_back(py::array_t<double>(
             this->parameter_block_sizes()[idx] * num_residuals(),
             jacobians[idx],
             dummy));
-
       }
       cached_flag = true;
-
     }
 
     // Check if the pointers have changed and if they have then change them
@@ -117,10 +113,8 @@ class PyCostFunction : public ceres::CostFunction {
     info = parameters_vec[0].request(true);
     if (info.ptr != parameters) {
       for (size_t idx = 0; idx < parameters_vec.size(); ++idx) {
-        parameters_vec[idx] =
-            py::array_t<double>(this->parameter_block_sizes()[idx],
-                                parameters[idx],
-                                dummy);
+        parameters_vec[idx] = py::array_t<double>(
+            this->parameter_block_sizes()[idx], parameters[idx], dummy);
       }
     }
     if (jacobians) {
@@ -135,21 +129,16 @@ class PyCostFunction : public ceres::CostFunction {
       }
     }
 
-    pybind11::function overload =
-        pybind11::get_overload(static_cast<const ceres::CostFunction *>(this),
-                               "Evaluate");
+    pybind11::function overload = pybind11::get_overload(
+        static_cast<const ceres::CostFunction*>(this), "Evaluate");
     if (overload) {
       if (jacobians) {
         auto o = overload.operator()<pybind11::return_value_policy::reference>(
-            parameters_vec,
-            residuals_wrap,
-            jacobians_vec);
+            parameters_vec, residuals_wrap, jacobians_vec);
         return pybind11::detail::cast_safe<bool>(std::move(o));
       } else {
         auto o = overload.operator()<pybind11::return_value_policy::reference>(
-            parameters_vec,
-            residuals_wrap,
-            nullptr);
+            parameters_vec, residuals_wrap, nullptr);
         return pybind11::detail::cast_safe<bool>(std::move(o));
       }
     }
@@ -163,13 +152,13 @@ class PyCostFunction : public ceres::CostFunction {
   // Mutable so they can be modified by the const function.
   mutable std::vector<py::array_t<double>> parameters_vec;
   mutable std::vector<py::array_t<double>> jacobians_vec;
-  mutable bool cached_flag = false; // Flag used to determine if the vectors
+  mutable bool cached_flag = false;  // Flag used to determine if the vectors
   // need to be resized
-  mutable py::array_t<double> residuals_wrap; // Buffer to contain the residuals
+  mutable py::array_t<double>
+      residuals_wrap;  // Buffer to contain the residuals
   // pointer
-  mutable py::str dummy; // Dummy variable for pybind11 so it doesn't make a
+  mutable py::str dummy;  // Dummy variable for pybind11 so it doesn't make a
   // copy
-
 };
 
 // Trampoline class so that we can create a LossFunction in Python.
@@ -178,10 +167,7 @@ class PyLossFunction : public ceres::LossFunction {
   /* Inherit the constructors */
   using ceres::LossFunction::LossFunction;
 
-  void Evaluate(double sq_norm, double out[3]) const override {
-
-  }
-
+  void Evaluate(double sq_norm, double out[3]) const override {}
 };
 
 //
@@ -189,21 +175,19 @@ class PyLocalParameterization : public ceres::LocalParameterization {
   /* Inherit the constructors */
   using ceres::LocalParameterization::LocalParameterization;
 
-  bool Plus(const double *x,
-            const double *delta,
-            double *x_plus_delta) const {
+  bool Plus(const double* x, const double* delta, double* x_plus_delta) const {
     assert(false);
     return true;
   }
-  bool ComputeJacobian(const double *x, double *jacobian) const {
+  bool ComputeJacobian(const double* x, double* jacobian) const {
     assert(false);
     return true;
   }
 
-  bool MultiplyByJacobian(const double *x,
+  bool MultiplyByJacobian(const double* x,
                           const int num_rows,
-                          const double *global_matrix,
-                          double *local_matrix) const {
+                          const double* global_matrix,
+                          double* local_matrix) const {
     assert(false);
     return true;
   }
@@ -211,21 +195,20 @@ class PyLocalParameterization : public ceres::LocalParameterization {
   // Size of x.
   int GlobalSize() const override {
     PYBIND11_OVERLOAD_PURE(
-        int, /* Return type */
-        ceres::LocalParameterization,      /* Parent class */
-        GlobalSize,          /* Name of function in C++ (must match Python name) */
+        int,                          /* Return type */
+        ceres::LocalParameterization, /* Parent class */
+        GlobalSize, /* Name of function in C++ (must match Python name) */
     );
   }
 
   // Size of delta.
   int LocalSize() const override {
     PYBIND11_OVERLOAD_PURE(
-        int, /* Return type */
-        ceres::LocalParameterization,      /* Parent class */
-        LocalSize,          /* Name of function in C++ (must match Python name) */
+        int,                          /* Return type */
+        ceres::LocalParameterization, /* Parent class */
+        LocalSize, /* Name of function in C++ (must match Python name) */
     );
   }
-
 };
 
 // Trampoline class so we can create an EvaluationCallback in Python.
@@ -236,14 +219,14 @@ class PyEvaluationCallBack : public ceres::EvaluationCallback {
 
   void PrepareForEvaluation(bool evaluate_jacobians,
                             bool new_evaluation_point) override {
-    PYBIND11_OVERLOAD_PURE(
-        void, /* Return type */
-        ceres::EvaluationCallback,      /* Parent class */
-        PrepareForEvaluation,          /* Name of function in C++ (must match Python name) */
-        evaluate_jacobians, new_evaluation_point      /* Argument(s) */
+    PYBIND11_OVERLOAD_PURE(void,                      /* Return type */
+                           ceres::EvaluationCallback, /* Parent class */
+                           PrepareForEvaluation,      /* Name of function in C++
+                                                         (must match Python name) */
+                           evaluate_jacobians,
+                           new_evaluation_point /* Argument(s) */
     );
   }
-
 };
 
 class PyFirstOrderFunction : public ceres::FirstOrderFunction {
@@ -253,9 +236,8 @@ class PyFirstOrderFunction : public ceres::FirstOrderFunction {
 
   int NumParameters() const override {
     pybind11::gil_scoped_acquire gil;
-    pybind11::function overload =
-        pybind11::get_overload(static_cast<const ceres::FirstOrderFunction *>(this),
-                               "NumParameters");
+    pybind11::function overload = pybind11::get_overload(
+        static_cast<const ceres::FirstOrderFunction*>(this), "NumParameters");
     if (overload) {
       auto o = overload();
       return pybind11::detail::cast_safe<int>(std::move(o));
@@ -265,9 +247,9 @@ class PyFirstOrderFunction : public ceres::FirstOrderFunction {
         ceres::FirstOrderFunction) "::" "NumParameters \"");
   }
 
-  bool Evaluate(const double *const parameters,
-                double *cost,
-                double *gradient) const override {
+  bool Evaluate(const double* const parameters,
+                double* cost,
+                double* gradient) const override {
     pybind11::gil_scoped_acquire gil;
     if (!cached_flag) {
       parameters_wrap = py::array_t<double>(NumParameters(), parameters, dummy);
@@ -291,21 +273,16 @@ class PyFirstOrderFunction : public ceres::FirstOrderFunction {
         gradient_wrap = py::array_t<double>(NumParameters(), gradient, dummy);
       }
     }
-    pybind11::function overload =
-        pybind11::get_overload(static_cast<const ceres::FirstOrderFunction *>(this),
-                               "Evaluate");
+    pybind11::function overload = pybind11::get_overload(
+        static_cast<const ceres::FirstOrderFunction*>(this), "Evaluate");
     if (overload) {
       if (gradient) {
         auto o = overload.operator()<pybind11::return_value_policy::reference>(
-            parameters_wrap,
-            cost_wrap,
-            gradient_wrap);
+            parameters_wrap, cost_wrap, gradient_wrap);
         return pybind11::detail::cast_safe<bool>(std::move(o));
       } else {
         auto o = overload.operator()<pybind11::return_value_policy::reference>(
-            parameters_wrap,
-            cost_wrap,
-            nullptr);
+            parameters_wrap, cost_wrap, nullptr);
         return pybind11::detail::cast_safe<bool>(std::move(o));
       }
     }
@@ -318,12 +295,11 @@ class PyFirstOrderFunction : public ceres::FirstOrderFunction {
   // Mutable so they can be modified by the const function.
   mutable py::array_t<double> parameters_wrap;
   mutable py::array_t<double> gradient_wrap;
-  mutable bool cached_flag = false; // Flag used to determine if the vectors
+  mutable bool cached_flag = false;  // Flag used to determine if the vectors
   // need to be resized
-  mutable py::array_t<double> cost_wrap; // Buffer to contain the cost ptr
-  mutable py::str dummy; // Dummy variable for pybind11 so it doesn't make a
+  mutable py::array_t<double> cost_wrap;  // Buffer to contain the cost ptr
+  mutable py::str dummy;  // Dummy variable for pybind11 so it doesn't make a
   // copy
-
 };
 
 class PyIterationCallback : public ceres::IterationCallback {
@@ -331,15 +307,15 @@ class PyIterationCallback : public ceres::IterationCallback {
   /* Inherit the constructors */
   using ceres::IterationCallback::IterationCallback;
 
-  ceres::CallbackReturnType operator()(const ceres::IterationSummary &summary) override {
+  ceres::CallbackReturnType operator()(
+      const ceres::IterationSummary& summary) override {
     PYBIND11_OVERLOAD_PURE(
         ceres::CallbackReturnType, /* Return type */
-        ceres::IterationCallback,      /* Parent class */
-        operator(),          /* Name of function in C++ (must match Python name) */
-        summary      /* Argument(s) */
+        ceres::IterationCallback,  /* Parent class */
+        operator(), /* Name of function in C++ (must match Python name) */
+        summary     /* Argument(s) */
     );
   }
-
 };
 
 // Hacky Wrapper for ceres::FirstOrderFunction.
@@ -351,74 +327,70 @@ class PyIterationCallback : public ceres::IterationCallback {
 // delete the FirstOrderFunction* without worrying about a double delete.
 class FirstOrderFunctionWrapper : public ceres::FirstOrderFunction {
  public:
-  explicit FirstOrderFunctionWrapper(FirstOrderFunction *real_function)
+  explicit FirstOrderFunctionWrapper(FirstOrderFunction* real_function)
       : function_(real_function) {}
-  bool Evaluate(const double *const parameters,
-                double *cost, double *gradient) const override {
+  bool Evaluate(const double* const parameters,
+                double* cost,
+                double* gradient) const override {
     return function_->Evaluate(parameters, cost, gradient);
   }
-  int NumParameters() const override {
-    return function_->NumParameters();
-  }
+  int NumParameters() const override { return function_->NumParameters(); }
 
  private:
-  FirstOrderFunction *function_;
+  FirstOrderFunction* function_;
 };
 
 // Same as FirstOrderFunctionWrapper
 class CostFunctionWrapper : public ceres::CostFunction {
-
-  explicit CostFunctionWrapper(ceres::CostFunction *real_cost_function)
+  explicit CostFunctionWrapper(ceres::CostFunction* real_cost_function)
       : cost_function_(real_cost_function) {
     this->set_num_residuals(cost_function_->num_residuals());
     *(this->mutable_parameter_block_sizes()) =
         cost_function_->parameter_block_sizes();
   }
 
-  bool Evaluate(double const *const *parameters,
-                double *residuals,
-                double **jacobians) const override {
+  bool Evaluate(double const* const* parameters,
+                double* residuals,
+                double** jacobians) const override {
     return cost_function_->Evaluate(parameters, residuals, jacobians);
   }
+
  private:
-  CostFunction *cost_function_;
+  CostFunction* cost_function_;
 };
 
 // Parses a numpy array and extracts the pointer to the first element.
 // Requires that the numpy array be either an array or a row/column vector
-double *ParseNumpyData(py::array_t<double> &np_buf) {
+double* ParseNumpyData(py::array_t<double>& np_buf) {
   py::buffer_info info = np_buf.request();
   // This is essentially just all error checking. As it will always be the info
   // ptr
   if (info.ndim > 2) {
-    std::string error_msg("Number of dimensions must be <=2. This function"
-                          "only allows either an array or row/column vector(2D matrix) "
-                              + std::to_string(info.ndim));
-    throw std::runtime_error(
-        error_msg);
+    std::string error_msg(
+        "Number of dimensions must be <=2. This function"
+        "only allows either an array or row/column vector(2D matrix) " +
+        std::to_string(info.ndim));
+    throw std::runtime_error(error_msg);
   }
   if (info.ndim == 2) {
     // Row or Column Vector. Represents 1 parameter
     if (info.shape[0] == 1 || info.shape[1] == 1) {
     } else {
-      std::string error_msg
-          ("Matrix is not a row or column vector and instead has size "
-               + std::to_string(info.shape[0]) + "x"
-               + std::to_string(info.shape[1]));
-      throw std::runtime_error(
-          error_msg);
+      std::string error_msg(
+          "Matrix is not a row or column vector and instead has size " +
+          std::to_string(info.shape[0]) + "x" + std::to_string(info.shape[1]));
+      throw std::runtime_error(error_msg);
     }
     if (info.itemsize != 8) {
       std::string error_msg("Numpy vector must be of type double ");
-      throw std::runtime_error(
-          error_msg);
+      throw std::runtime_error(error_msg);
     }
   }
-  return (double *) info.ptr;
+  return (double*)info.ptr;
 }
 
 PYBIND11_MODULE(PyCeres, m) {
-  m.doc() = "Ceres wrappers"; // optional module docstring'
+  m.doc() = "Ceres wrappers";  // optional module docstring'
 
   py::enum_<ceres::Ownership>(m, "Ownership")
       .value("DO_NOT_TAKE_OWNERSHIP", ceres::Ownership::DO_NOT_TAKE_OWNERSHIP)
@@ -447,8 +419,8 @@ PYBIND11_MODULE(PyCeres, m) {
       .value("CUBIC", ceres::LineSearchInterpolationType::CUBIC)
       .value("QUADRATIC", ceres::LineSearchInterpolationType::QUADRATIC);
 
-  py::enum_<ceres::NonlinearConjugateGradientType>(m,
-                                                   "NonlinearConjugateGradientType")
+  py::enum_<ceres::NonlinearConjugateGradientType>(
+      m, "NonlinearConjugateGradientType")
       .value("FLETCHER_REEVES",
              ceres::NonlinearConjugateGradientType::FLETCHER_REEVES)
       .value("HESTENES_STIEFEL",
@@ -468,8 +440,7 @@ PYBIND11_MODULE(PyCeres, m) {
       .value("CGNR", ceres::LinearSolverType::CGNR);
 
   py::enum_<ceres::DoglegType>(m, "DoglegType")
-      .value("TRADITIONAL_DOGLEG",
-             ceres::DoglegType::TRADITIONAL_DOGLEG)
+      .value("TRADITIONAL_DOGLEG", ceres::DoglegType::TRADITIONAL_DOGLEG)
       .value("SUBSPACE_DOGLEG", ceres::DoglegType::SUBSPACE_DOGLEG);
 
   py::enum_<ceres::TrustRegionStrategyType>(m, "TrustRegionStrategyType")
@@ -478,8 +449,7 @@ PYBIND11_MODULE(PyCeres, m) {
       .value("DOGLEG", ceres::TrustRegionStrategyType::DOGLEG);
 
   py::enum_<ceres::PreconditionerType>(m, "PreconditionerType")
-      .value("IDENTITY",
-             ceres::PreconditionerType::IDENTITY)
+      .value("IDENTITY", ceres::PreconditionerType::IDENTITY)
       .value("JACOBI", ceres::PreconditionerType::JACOBI)
       .value("SCHUR_JACOBI", ceres::PreconditionerType::SCHUR_JACOBI)
       .value("CLUSTER_JACOBI", ceres::PreconditionerType::CLUSTER_JACOBI)
@@ -492,14 +462,13 @@ PYBIND11_MODULE(PyCeres, m) {
              ceres::VisibilityClusteringType::CANONICAL_VIEWS)
       .value("SINGLE_LINKAGE", ceres::VisibilityClusteringType::SINGLE_LINKAGE);
 
-  py::enum_<ceres::DenseLinearAlgebraLibraryType>(m,
-                                                  "DenseLinearAlgebraLibraryType")
-      .value("EIGEN",
-             ceres::DenseLinearAlgebraLibraryType::EIGEN)
+  py::enum_<ceres::DenseLinearAlgebraLibraryType>(
+      m, "DenseLinearAlgebraLibraryType")
+      .value("EIGEN", ceres::DenseLinearAlgebraLibraryType::EIGEN)
       .value("LAPACK", ceres::DenseLinearAlgebraLibraryType::LAPACK);
 
-  py::enum_<ceres::SparseLinearAlgebraLibraryType>(m,
-                                                   "SparseLinearAlgebraLibraryType")
+  py::enum_<ceres::SparseLinearAlgebraLibraryType>(
+      m, "SparseLinearAlgebraLibraryType")
       .value("SUITE_SPARSE",
              ceres::SparseLinearAlgebraLibraryType::SUITE_SPARSE)
       .value("CX_SPARSE", ceres::SparseLinearAlgebraLibraryType::CX_SPARSE)
@@ -507,20 +476,16 @@ PYBIND11_MODULE(PyCeres, m) {
              ceres::SparseLinearAlgebraLibraryType::EIGEN_SPARSE)
       .value("ACCELERATE_SPARSE",
              ceres::SparseLinearAlgebraLibraryType::ACCELERATE_SPARSE)
-      .value("NO_SPARSE",
-             ceres::SparseLinearAlgebraLibraryType::NO_SPARSE);
+      .value("NO_SPARSE", ceres::SparseLinearAlgebraLibraryType::NO_SPARSE);
 
   py::enum_<ceres::LoggingType>(m, "LoggingType")
-      .value("SILENT",
-             ceres::LoggingType::SILENT)
+      .value("SILENT", ceres::LoggingType::SILENT)
       .value("PER_MINIMIZER_ITERATION",
              ceres::LoggingType::PER_MINIMIZER_ITERATION);
 
   py::enum_<ceres::CovarianceAlgorithmType>(m, "CovarianceAlgorithmType")
-      .value("DENSE_SVD",
-             ceres::CovarianceAlgorithmType::DENSE_SVD)
-      .value("SPARSE_QR",
-             ceres::CovarianceAlgorithmType::SPARSE_QR);
+      .value("DENSE_SVD", ceres::CovarianceAlgorithmType::DENSE_SVD)
+      .value("SPARSE_QR", ceres::CovarianceAlgorithmType::SPARSE_QR);
 
   py::enum_<ceres::CallbackReturnType>(m, "CallbackReturnType")
       .value("SOLVER_CONTINUE", ceres::CallbackReturnType::SOLVER_CONTINUE)
@@ -534,7 +499,7 @@ PYBIND11_MODULE(PyCeres, m) {
 
   using options = ceres::Problem::Options;
   py::class_<ceres::Problem::Options> option(m, "ProblemOptions");
-  option.def(py::init(&CreateNoOwnershipOption)); // Ensures default is that
+  option.def(py::init(&CreateNoOwnershipOption));  // Ensures default is that
   // Python manages memory
   option.def_readwrite("cost_function_ownership",
                        &options::cost_function_ownership);
@@ -547,8 +512,8 @@ PYBIND11_MODULE(PyCeres, m) {
                        &options::disable_all_safety_checks);
   py::class_<ceres::Problem::EvaluateOptions>(m, "EvaluateOptions")
       .def(py::init<>())
-          // Doesn't make sense to wrap this as you can't see the pointers in python
-          //.def_readwrite("parameter_blocks",&ceres::Problem::EvaluateOptions)
+      // Doesn't make sense to wrap this as you can't see the pointers in python
+      //.def_readwrite("parameter_blocks",&ceres::Problem::EvaluateOptions)
       .def_readwrite("apply_loss_function",
                      &ceres::Problem::EvaluateOptions::apply_loss_function)
       .def_readwrite("num_threads",
@@ -560,10 +525,7 @@ PYBIND11_MODULE(PyCeres, m) {
   // (Ceres doesn't make it part of its public API). Since pybind11 needs a type
   // we use this class instead which simply holds the pointer.
   struct ResidualBlockIDWrapper {
-
-    ResidualBlockIDWrapper(const ceres::ResidualBlockId &id) : id(id) {
-
-    }
+    ResidualBlockIDWrapper(const ceres::ResidualBlockId& id) : id(id) {}
     const ceres::ResidualBlockId id;
   };
 
@@ -578,211 +540,203 @@ PYBIND11_MODULE(PyCeres, m) {
   problem.def("NumResiduals", &ceres::Problem::NumResiduals);
   problem.def("ParameterBlockSize", &ceres::Problem::ParameterBlockSize);
   problem.def("SetParameterBlockConstant",
-              [](ceres::Problem &myself, py::array_t<double> &np_arr) {
+              [](ceres::Problem& myself, py::array_t<double>& np_arr) {
                 py::buffer_info info = np_arr.request();
-                myself.SetParameterBlockConstant((double *) info.ptr);
+                myself.SetParameterBlockConstant((double*)info.ptr);
               });
   problem.def("SetParameterBlockVariable",
-              [](ceres::Problem &myself, py::array_t<double> &np_arr) {
+              [](ceres::Problem& myself, py::array_t<double>& np_arr) {
                 py::buffer_info info = np_arr.request();
-                myself.SetParameterBlockVariable((double *) info.ptr);
+                myself.SetParameterBlockVariable((double*)info.ptr);
               });
   problem.def("IsParameterBlockConstant",
-              [](ceres::Problem &myself, py::array_t<double> &np_arr) {
+              [](ceres::Problem& myself, py::array_t<double>& np_arr) {
                 py::buffer_info info = np_arr.request();
-                myself.IsParameterBlockConstant((double *) info.ptr);
+                myself.IsParameterBlockConstant((double*)info.ptr);
               });
   problem.def("SetParameterLowerBound",
-              [](ceres::Problem &myself,
-                 py::array_t<double> &np_arr,
+              [](ceres::Problem& myself,
+                 py::array_t<double>& np_arr,
                  int index,
                  double lower_bound) {
                 py::buffer_info info = np_arr.request();
-                myself.SetParameterLowerBound((double *) info.ptr,
-                                              index,
-                                              lower_bound);
+                myself.SetParameterLowerBound(
+                    (double*)info.ptr, index, lower_bound);
               });
   problem.def("SetParameterUpperBound",
-              [](ceres::Problem &myself,
-                 py::array_t<double> &np_arr,
+              [](ceres::Problem& myself,
+                 py::array_t<double>& np_arr,
                  int index,
                  double upper_bound) {
                 py::buffer_info info = np_arr.request();
-                myself.SetParameterUpperBound((double *) info.ptr,
-                                              index,
-                                              upper_bound);
+                myself.SetParameterUpperBound(
+                    (double*)info.ptr, index, upper_bound);
               });
-  problem.def("GetParameterLowerBound",
-              [](ceres::Problem &myself,
-                 py::array_t<double> &np_arr,
-                 int index) {
-                py::buffer_info info = np_arr.request();
-                return myself.GetParameterLowerBound((double *) info.ptr,
-                                                     index);
-              });
-  problem.def("GetParameterUpperBound",
-              [](ceres::Problem &myself,
-                 py::array_t<double> &np_arr,
-                 int index) {
-                py::buffer_info info = np_arr.request();
-                return myself.GetParameterUpperBound((double *) info.ptr,
-                                                     index);
-              });
+  problem.def(
+      "GetParameterLowerBound",
+      [](ceres::Problem& myself, py::array_t<double>& np_arr, int index) {
+        py::buffer_info info = np_arr.request();
+        return myself.GetParameterLowerBound((double*)info.ptr, index);
+      });
+  problem.def(
+      "GetParameterUpperBound",
+      [](ceres::Problem& myself, py::array_t<double>& np_arr, int index) {
+        py::buffer_info info = np_arr.request();
+        return myself.GetParameterUpperBound((double*)info.ptr, index);
+      });
   problem.def("GetParameterization",
-              [](ceres::Problem &myself, py::array_t<double> &np_arr) {
+              [](ceres::Problem& myself, py::array_t<double>& np_arr) {
                 py::buffer_info info = np_arr.request();
-                myself.GetParameterization((double *) info.ptr);
+                myself.GetParameterization((double*)info.ptr);
               });
   problem.def("SetParameterization",
-              [](ceres::Problem &myself,
-                 py::array_t<double> &np_arr,
-                 ceres::LocalParameterization *local_parameterization) {
+              [](ceres::Problem& myself,
+                 py::array_t<double>& np_arr,
+                 ceres::LocalParameterization* local_parameterization) {
                 py::buffer_info info = np_arr.request();
-                myself.SetParameterization((double *) info.ptr,
+                myself.SetParameterization((double*)info.ptr,
                                            local_parameterization);
               });
   problem.def("ParameterBlockSize",
-              [](ceres::Problem &myself, py::array_t<double> &np_arr) {
+              [](ceres::Problem& myself, py::array_t<double>& np_arr) {
                 py::buffer_info info = np_arr.request();
-                return myself.ParameterBlockSize((double *) info.ptr);
+                return myself.ParameterBlockSize((double*)info.ptr);
               });
   problem.def("HasParameterBlock",
-              [](ceres::Problem &myself, py::array_t<double> &np_arr) {
+              [](ceres::Problem& myself, py::array_t<double>& np_arr) {
                 py::buffer_info info = np_arr.request();
-                return myself.HasParameterBlock((double *) info.ptr);
+                return myself.HasParameterBlock((double*)info.ptr);
               });
-  problem.def("AddResidualBlock",
-              [](ceres::Problem &myself,
-                 ceres::CostFunction *cost,
-                 ceres::LossFunction *loss,
-                 py::array_t<double> &values) {
-                // Should we even do this error checking?
-                double *pointer = ParseNumpyData(values);
-                return ResidualBlockIDWrapper(myself.AddResidualBlock(cost, loss, pointer));
-              }, py::keep_alive<1, 2>(), // CostFunction
-              py::keep_alive<1, 3>()); // LossFunction
+  problem.def(
+      "AddResidualBlock",
+      [](ceres::Problem& myself,
+         ceres::CostFunction* cost,
+         ceres::LossFunction* loss,
+         py::array_t<double>& values) {
+        // Should we even do this error checking?
+        double* pointer = ParseNumpyData(values);
+        return ResidualBlockIDWrapper(
+            myself.AddResidualBlock(cost, loss, pointer));
+      },
+      py::keep_alive<1, 2>(),   // CostFunction
+      py::keep_alive<1, 3>());  // LossFunction
 
-  problem.def("AddResidualBlock",
-              [](ceres::Problem &myself,
-                 ceres::CostFunction *cost,
-                 ceres::LossFunction *loss,
-                 py::array_t<double> &values1,
-                 py::array_t<double> &values2) {
-                double *pointer1 = ParseNumpyData(values1);
-                double *pointer2 = ParseNumpyData(values2);
-                return ResidualBlockIDWrapper(myself.AddResidualBlock(cost, loss, pointer1, pointer2));
-              },
-              py::keep_alive<1, 2>(), // Cost Function
-              py::keep_alive<1, 3>()); // Loss Function
-  problem.def("AddResidualBlock",
-              [](ceres::Problem &myself,
-                 ceres::CostFunction *cost,
-                 ceres::LossFunction *loss,
-                 py::array_t<double> &values1,
-                 py::array_t<double> &values2,
-                 py::array_t<double> &values3) {
-                double *pointer1 = ParseNumpyData(values1);
-                double *pointer2 = ParseNumpyData(values2);
-                double *pointer3 = ParseNumpyData(values3);
-                return ResidualBlockIDWrapper(myself.AddResidualBlock(cost,
-                                                                      loss,
-                                                                      pointer1,
-                                                                      pointer2,
-                                                                      pointer3));
-              },
-              py::keep_alive<1, 2>(), // Cost Function
-              py::keep_alive<1, 3>());// Loss Function
-  problem.def("AddResidualBlock",
-              [](ceres::Problem &myself,
-                 ceres::CostFunction *cost,
-                 ceres::LossFunction *loss,
-                 py::array_t<double> &values1,
-                 py::array_t<double> &values2,
-                 py::array_t<double> &values3,
-                 py::array_t<double> &values4) {
-                double *pointer1 = ParseNumpyData(values1);
-                double *pointer2 = ParseNumpyData(values2);
-                double *pointer3 = ParseNumpyData(values3);
-                double *pointer4 = ParseNumpyData(values4);
-                return ResidualBlockIDWrapper(myself.AddResidualBlock(cost,
-                                                                      loss,
-                                                                      pointer1,
-                                                                      pointer2,
-                                                                      pointer3,
-                                                                      pointer4));
-              },
-              py::keep_alive<1, 2>(), // Cost Function
-              py::keep_alive<1, 3>()); // Loss Function
+  problem.def(
+      "AddResidualBlock",
+      [](ceres::Problem& myself,
+         ceres::CostFunction* cost,
+         ceres::LossFunction* loss,
+         py::array_t<double>& values1,
+         py::array_t<double>& values2) {
+        double* pointer1 = ParseNumpyData(values1);
+        double* pointer2 = ParseNumpyData(values2);
+        return ResidualBlockIDWrapper(
+            myself.AddResidualBlock(cost, loss, pointer1, pointer2));
+      },
+      py::keep_alive<1, 2>(),   // Cost Function
+      py::keep_alive<1, 3>());  // Loss Function
+  problem.def(
+      "AddResidualBlock",
+      [](ceres::Problem& myself,
+         ceres::CostFunction* cost,
+         ceres::LossFunction* loss,
+         py::array_t<double>& values1,
+         py::array_t<double>& values2,
+         py::array_t<double>& values3) {
+        double* pointer1 = ParseNumpyData(values1);
+        double* pointer2 = ParseNumpyData(values2);
+        double* pointer3 = ParseNumpyData(values3);
+        return ResidualBlockIDWrapper(
+            myself.AddResidualBlock(cost, loss, pointer1, pointer2, pointer3));
+      },
+      py::keep_alive<1, 2>(),   // Cost Function
+      py::keep_alive<1, 3>());  // Loss Function
+  problem.def(
+      "AddResidualBlock",
+      [](ceres::Problem& myself,
+         ceres::CostFunction* cost,
+         ceres::LossFunction* loss,
+         py::array_t<double>& values1,
+         py::array_t<double>& values2,
+         py::array_t<double>& values3,
+         py::array_t<double>& values4) {
+        double* pointer1 = ParseNumpyData(values1);
+        double* pointer2 = ParseNumpyData(values2);
+        double* pointer3 = ParseNumpyData(values3);
+        double* pointer4 = ParseNumpyData(values4);
+        return ResidualBlockIDWrapper(myself.AddResidualBlock(
+            cost, loss, pointer1, pointer2, pointer3, pointer4));
+      },
+      py::keep_alive<1, 2>(),   // Cost Function
+      py::keep_alive<1, 3>());  // Loss Function
 
-  problem.def("AddResidualBlock",
-              [](ceres::Problem &myself,
-                 ceres::CostFunction *cost,
-                 ceres::LossFunction *loss,
-                 py::array_t<double> &values1,
-                 py::array_t<double> &values2,
-                 py::array_t<double> &values3,
-                 py::array_t<double> &values4,
-                 py::array_t<double> &values5) {
-                double *pointer1 = ParseNumpyData(values1);
-                double *pointer2 = ParseNumpyData(values2);
-                double *pointer3 = ParseNumpyData(values3);
-                double *pointer4 = ParseNumpyData(values4);
-                double *pointer5 = ParseNumpyData(values5);
-                return ResidualBlockIDWrapper(myself.AddResidualBlock(cost,
-                                                                      loss,
-                                                                      pointer1,
-                                                                      pointer2,
-                                                                      pointer3,
-                                                                      pointer4,
-                                                                      pointer5));
-              },
-              py::keep_alive<1, 2>(), // Cost Function
-              py::keep_alive<1, 3>()); // Loss Function
+  problem.def(
+      "AddResidualBlock",
+      [](ceres::Problem& myself,
+         ceres::CostFunction* cost,
+         ceres::LossFunction* loss,
+         py::array_t<double>& values1,
+         py::array_t<double>& values2,
+         py::array_t<double>& values3,
+         py::array_t<double>& values4,
+         py::array_t<double>& values5) {
+        double* pointer1 = ParseNumpyData(values1);
+        double* pointer2 = ParseNumpyData(values2);
+        double* pointer3 = ParseNumpyData(values3);
+        double* pointer4 = ParseNumpyData(values4);
+        double* pointer5 = ParseNumpyData(values5);
+        return ResidualBlockIDWrapper(myself.AddResidualBlock(
+            cost, loss, pointer1, pointer2, pointer3, pointer4, pointer5));
+      },
+      py::keep_alive<1, 2>(),   // Cost Function
+      py::keep_alive<1, 3>());  // Loss Function
 
-  problem.def("AddResidualBlock",
-              [](ceres::Problem &myself,
-                 ceres::CostFunction *cost,
-                 ceres::LossFunction *loss,
-                 std::vector<py::array_t<double>> &values) {
-                std::vector<double *> pointer_values;
-                for (int idx = 0; idx < values.size(); ++idx) {
-                  pointer_values.push_back(ParseNumpyData(values[idx]));
-                }
-                return ResidualBlockIDWrapper(myself.AddResidualBlock(cost, loss, pointer_values));
-              },
-              py::keep_alive<1, 2>(), // Cost Function
-              py::keep_alive<1, 3>()); // Loss Function
+  problem.def(
+      "AddResidualBlock",
+      [](ceres::Problem& myself,
+         ceres::CostFunction* cost,
+         ceres::LossFunction* loss,
+         std::vector<py::array_t<double>>& values) {
+        std::vector<double*> pointer_values;
+        for (int idx = 0; idx < values.size(); ++idx) {
+          pointer_values.push_back(ParseNumpyData(values[idx]));
+        }
+        return ResidualBlockIDWrapper(
+            myself.AddResidualBlock(cost, loss, pointer_values));
+      },
+      py::keep_alive<1, 2>(),   // Cost Function
+      py::keep_alive<1, 3>());  // Loss Function
 
-  problem.def("AddParameterBlock",
-              [](ceres::Problem &myself,
-                 py::array_t<double> &values, int size) {
-                double *pointer = ParseNumpyData(values);
-                myself.AddParameterBlock(pointer, size);
-              });
+  problem.def(
+      "AddParameterBlock",
+      [](ceres::Problem& myself, py::array_t<double>& values, int size) {
+        double* pointer = ParseNumpyData(values);
+        myself.AddParameterBlock(pointer, size);
+      });
 
-  problem.def("AddParameterBlock",
-              [](ceres::Problem &myself,
-                 py::array_t<double> &values,
-                 int size,
-                 ceres::LocalParameterization *local_parameterization) {
-                double *pointer = ParseNumpyData(values);
-                myself.AddParameterBlock(pointer, size, local_parameterization);
-              },
-              py::keep_alive<1, 4>() // LocalParameterization
+  problem.def(
+      "AddParameterBlock",
+      [](ceres::Problem& myself,
+         py::array_t<double>& values,
+         int size,
+         ceres::LocalParameterization* local_parameterization) {
+        double* pointer = ParseNumpyData(values);
+        myself.AddParameterBlock(pointer, size, local_parameterization);
+      },
+      py::keep_alive<1, 4>()  // LocalParameterization
   );
 
   problem.def("RemoveParameterBlock",
-              [](ceres::Problem &myself,
-                 py::array_t<double> &values) {
-                double *pointer = ParseNumpyData(values);
+              [](ceres::Problem& myself, py::array_t<double>& values) {
+                double* pointer = ParseNumpyData(values);
                 myself.RemoveParameterBlock(pointer);
               });
 
-  problem.def("RemoveResidualBlock",
-              [](ceres::Problem &myself,
-                 ResidualBlockIDWrapper &residual_block_id) {
-                myself.RemoveResidualBlock(residual_block_id.id);
-              });
+  problem.def(
+      "RemoveResidualBlock",
+      [](ceres::Problem& myself, ResidualBlockIDWrapper& residual_block_id) {
+        myself.RemoveResidualBlock(residual_block_id.id);
+      });
 
   py::class_<ceres::Solver::Options> solver_options(m, "SolverOptions");
   using s_options = ceres::Solver::Options;
@@ -796,24 +750,29 @@ PYBIND11_MODULE(PyCeres, m) {
   solver_options.def_readwrite("nonlinear_conjugate_gradient_type",
                                &s_options::nonlinear_conjugate_gradient_type);
   solver_options.def_readwrite("max_lbfgs_rank", &s_options::max_lbfgs_rank);
-  solver_options.def_readwrite("use_approximate_eigenvalue_bfgs_scaling",
-                               &s_options::use_approximate_eigenvalue_bfgs_scaling);
+  solver_options.def_readwrite(
+      "use_approximate_eigenvalue_bfgs_scaling",
+      &s_options::use_approximate_eigenvalue_bfgs_scaling);
   solver_options.def_readwrite("line_search_interpolation_type",
                                &s_options::line_search_interpolation_type);
   solver_options.def_readwrite("min_line_search_step_size",
                                &s_options::min_line_search_step_size);
-  solver_options.def_readwrite("line_search_sufficient_function_decrease",
-                               &s_options::line_search_sufficient_function_decrease);
+  solver_options.def_readwrite(
+      "line_search_sufficient_function_decrease",
+      &s_options::line_search_sufficient_function_decrease);
   solver_options.def_readwrite("max_line_search_step_contraction",
                                &s_options::max_line_search_step_contraction);
   solver_options.def_readwrite("min_line_search_step_contraction",
                                &s_options::min_line_search_step_contraction);
-  solver_options.def_readwrite("max_num_line_search_step_size_iterations",
-                               &s_options::max_num_line_search_step_size_iterations);
-  solver_options.def_readwrite("max_num_line_search_direction_restarts",
-                               &s_options::max_num_line_search_direction_restarts);
-  solver_options.def_readwrite("line_search_sufficient_curvature_decrease",
-                               &s_options::line_search_sufficient_curvature_decrease);
+  solver_options.def_readwrite(
+      "max_num_line_search_step_size_iterations",
+      &s_options::max_num_line_search_step_size_iterations);
+  solver_options.def_readwrite(
+      "max_num_line_search_direction_restarts",
+      &s_options::max_num_line_search_direction_restarts);
+  solver_options.def_readwrite(
+      "line_search_sufficient_curvature_decrease",
+      &s_options::line_search_sufficient_curvature_decrease);
   solver_options.def_readwrite("max_line_search_step_expansion",
                                &s_options::max_line_search_step_expansion);
   solver_options.def_readwrite("trust_region_strategy_type",
@@ -871,22 +830,23 @@ PYBIND11_MODULE(PyCeres, m) {
   solver_options.def_readwrite("minimizer_progress_to_stdout",
                                &s_options::minimizer_progress_to_stdout);
 
-  py::class_<ceres::CostFunction, PyCostFunction /* <--- trampoline*/>(m,
-                                                                       "CostFunction")
+  py::class_<ceres::CostFunction, PyCostFunction /* <--- trampoline*/>(
+      m, "CostFunction")
       .def(py::init<>())
       .def("num_residuals", &ceres::CostFunction::num_residuals)
-      .def("num_parameter_blocks", [](ceres::CostFunction &myself) {
-        return myself.parameter_block_sizes().size();
-      })
+      .def("num_parameter_blocks",
+           [](ceres::CostFunction& myself) {
+             return myself.parameter_block_sizes().size();
+           })
       .def("parameter_block_sizes",
            &ceres::CostFunction::parameter_block_sizes,
            py::return_value_policy::reference)
       .def("set_num_residuals", &PyCostFunction::set_num_residuals)
       .def("set_parameter_block_sizes",
-           [](ceres::CostFunction &myself, std::vector<int32_t> &sizes) {
-             for (auto s:sizes) {
-               const_cast<std::vector<int32_t> &>(myself.parameter_block_sizes()).push_back(
-                   s);
+           [](ceres::CostFunction& myself, std::vector<int32_t>& sizes) {
+             for (auto s : sizes) {
+               const_cast<std::vector<int32_t>&>(myself.parameter_block_sizes())
+                   .push_back(s);
              }
            });
 
@@ -975,10 +935,12 @@ PYBIND11_MODULE(PyCeres, m) {
                                &s_summary::num_jacobian_evaluations);
   solver_summary.def_readwrite("inner_iteration_time_in_seconds",
                                &s_summary::inner_iteration_time_in_seconds);
-  solver_summary.def_readwrite("line_search_cost_evaluation_time_in_seconds",
-                               &s_summary::line_search_cost_evaluation_time_in_seconds);
-  solver_summary.def_readwrite("line_search_gradient_evaluation_time_in_seconds",
-                               &s_summary::line_search_gradient_evaluation_time_in_seconds);
+  solver_summary.def_readwrite(
+      "line_search_cost_evaluation_time_in_seconds",
+      &s_summary::line_search_cost_evaluation_time_in_seconds);
+  solver_summary.def_readwrite(
+      "line_search_gradient_evaluation_time_in_seconds",
+      &s_summary::line_search_gradient_evaluation_time_in_seconds);
   solver_summary.def_readwrite(
       "line_search_polynomial_minimization_time_in_seconds",
       &s_summary::line_search_polynomial_minimization_time_in_seconds);
@@ -1061,82 +1023,86 @@ PYBIND11_MODULE(PyCeres, m) {
                                  &it_sum::cumulative_time_in_seconds);
 
   py::class_<ceres::IterationCallback,
-             PyIterationCallback /* <--- trampoline*/>(m,
-                                                       "IterationCallback")
+             PyIterationCallback /* <--- trampoline*/>(m, "IterationCallback")
       .def(py::init<>());
 
   py::class_<ceres::EvaluationCallback,
-             PyEvaluationCallBack /* <--- trampoline*/>(m,
-                                                        "EvaluationCallback")
+             PyEvaluationCallBack /* <--- trampoline*/>(m, "EvaluationCallback")
       .def(py::init<>());
 
   py::class_<ceres::FirstOrderFunction,
-             PyFirstOrderFunction /* <--- trampoline*/>(m,
-                                                        "FirstOrderFunction")
+             PyFirstOrderFunction /* <--- trampoline*/>(m, "FirstOrderFunction")
       .def(py::init<>());
 
   py::class_<ceres::LocalParameterization,
-             PyLocalParameterization /* <--- trampoline*/>(m,
-                                                           "LocalParameterization")
+             PyLocalParameterization /* <--- trampoline*/>(
+      m, "LocalParameterization")
       .def(py::init<>())
       .def("GlobalSize", &ceres::LocalParameterization::GlobalSize)
       .def("LocalSize", &ceres::LocalParameterization::LocalSize);
 
-  py::class_<ceres::IdentityParameterization, ceres::LocalParameterization>(m,
-  "IdentityParameterization")
-    .def (py::init<int>());
-  py::class_<ceres::QuaternionParameterization, ceres::LocalParameterization>(m,
-  "QuaternionParameterization")
-    .def (py::init<>());
-  py::class_<ceres::HomogeneousVectorParameterization, ceres::LocalParameterization>(m,
-  "HomogeneousVectorParameterization")
-    .def (py::init<int>());
-  py::class_<ceres::EigenQuaternionParameterization, ceres::LocalParameterization>(m,
-  "EigenQuaternionParameterization")
-    .def (py::init<>());
-  py::class_<ceres::SubsetParameterization, ceres::LocalParameterization>(m,
-  "SubsetParameterization")
-    .def (py::init<int, const std::vector<int>&>());
+  py::class_<ceres::IdentityParameterization, ceres::LocalParameterization>(
+      m, "IdentityParameterization")
+      .def(py::init<int>());
+  py::class_<ceres::QuaternionParameterization, ceres::LocalParameterization>(
+      m, "QuaternionParameterization")
+      .def(py::init<>());
+  py::class_<ceres::HomogeneousVectorParameterization,
+             ceres::LocalParameterization>(m,
+                                           "HomogeneousVectorParameterization")
+      .def(py::init<int>());
+  py::class_<ceres::EigenQuaternionParameterization,
+             ceres::LocalParameterization>(m, "EigenQuaternionParameterization")
+      .def(py::init<>());
+  py::class_<ceres::SubsetParameterization, ceres::LocalParameterization>(
+      m, "SubsetParameterization")
+      .def(py::init<int, const std::vector<int>&>());
 
   py::class_<ceres::GradientProblem> grad_problem(m, "GradientProblem");
-  grad_problem.def(py::init([](ceres::FirstOrderFunction *func) {
-    ceres::FirstOrderFunction *wrap = new FirstOrderFunctionWrapper(func);
-    return ceres::GradientProblem(wrap);
-  }), py::keep_alive<1, 2>() // FirstOrderFunction
+  grad_problem.def(py::init([](ceres::FirstOrderFunction* func) {
+                     ceres::FirstOrderFunction* wrap =
+                         new FirstOrderFunctionWrapper(func);
+                     return ceres::GradientProblem(wrap);
+                   }),
+                   py::keep_alive<1, 2>()  // FirstOrderFunction
   );
 
   grad_problem.def("NumParameters", &ceres::GradientProblem::NumParameters);
 
-  py::class_<ceres::GradientProblemSolver::Options>
-      grad_options(m, "GradientProblemOptions");
+  py::class_<ceres::GradientProblemSolver::Options> grad_options(
+      m, "GradientProblemOptions");
   using g_options = ceres::GradientProblemSolver::Options;
   grad_options.def(py::init<>());
   grad_options.def("IsValid", &g_options::IsValid);
   grad_options.def_readwrite("line_search_direction_type",
                              &g_options::line_search_direction_type);
-  grad_options.def_readwrite("line_search_type",
-                             &g_options::line_search_type);
+  grad_options.def_readwrite("line_search_type", &g_options::line_search_type);
   grad_options.def_readwrite("nonlinear_conjugate_gradient_type",
                              &g_options::nonlinear_conjugate_gradient_type);
   grad_options.def_readwrite("max_lbfgs_rank", &g_options::max_lbfgs_rank);
-  grad_options.def_readwrite("use_approximate_eigenvalue_bfgs_scaling",
-                             &g_options::use_approximate_eigenvalue_bfgs_scaling);
+  grad_options.def_readwrite(
+      "use_approximate_eigenvalue_bfgs_scaling",
+      &g_options::use_approximate_eigenvalue_bfgs_scaling);
   grad_options.def_readwrite("line_search_interpolation_type",
                              &g_options::line_search_interpolation_type);
   grad_options.def_readwrite("min_line_search_step_size",
                              &g_options::min_line_search_step_size);
-  grad_options.def_readwrite("line_search_sufficient_function_decrease",
-                             &g_options::line_search_sufficient_function_decrease);
+  grad_options.def_readwrite(
+      "line_search_sufficient_function_decrease",
+      &g_options::line_search_sufficient_function_decrease);
   grad_options.def_readwrite("max_line_search_step_contraction",
                              &g_options::max_line_search_step_contraction);
   grad_options.def_readwrite("min_line_search_step_contraction",
                              &g_options::min_line_search_step_contraction);
-  grad_options.def_readwrite("max_num_line_search_step_size_iterations",
-                             &g_options::max_num_line_search_step_size_iterations);
-  grad_options.def_readwrite("max_num_line_search_direction_restarts",
-                             &g_options::max_num_line_search_direction_restarts);
-  grad_options.def_readwrite("line_search_sufficient_curvature_decrease",
-                             &g_options::line_search_sufficient_curvature_decrease);
+  grad_options.def_readwrite(
+      "max_num_line_search_step_size_iterations",
+      &g_options::max_num_line_search_step_size_iterations);
+  grad_options.def_readwrite(
+      "max_num_line_search_direction_restarts",
+      &g_options::max_num_line_search_direction_restarts);
+  grad_options.def_readwrite(
+      "line_search_sufficient_curvature_decrease",
+      &g_options::line_search_sufficient_curvature_decrease);
   grad_options.def_readwrite("max_line_search_step_expansion",
                              &g_options::max_line_search_step_expansion);
   grad_options.def_readwrite("max_num_iterations",
@@ -1152,8 +1118,8 @@ PYBIND11_MODULE(PyCeres, m) {
   grad_options.def_readwrite("minimizer_progress_to_stdout",
                              &g_options::minimizer_progress_to_stdout);
 
-  py::class_<ceres::GradientProblemSolver::Summary>
-      grad_summary(m, "GradientProblemSummary");
+  py::class_<ceres::GradientProblemSolver::Summary> grad_summary(
+      m, "GradientProblemSummary");
   using g_sum = ceres::GradientProblemSolver::Summary;
   grad_summary.def(py::init<>());
   grad_summary.def("BriefReport",
@@ -1162,26 +1128,27 @@ PYBIND11_MODULE(PyCeres, m) {
                    &ceres::GradientProblemSolver::Summary::FullReport);
   grad_summary.def("IsSolutionUsable",
                    &ceres::GradientProblemSolver::Summary::IsSolutionUsable);
-  grad_summary.def_readwrite("initial_cost",
-                             &ceres::GradientProblemSolver::Summary::initial_cost);
-  grad_summary.def_readwrite("final_cost",
-                             &ceres::GradientProblemSolver::Summary::final_cost);
+  grad_summary.def_readwrite(
+      "initial_cost", &ceres::GradientProblemSolver::Summary::initial_cost);
+  grad_summary.def_readwrite(
+      "final_cost", &ceres::GradientProblemSolver::Summary::final_cost);
 
   // GradientProblem Solve
-  m.def("Solve", [](const ceres::GradientProblemSolver::Options &options,
-                    const ceres::GradientProblem &problem,
-                    py::array_t<double> &np_params,
-                    ceres::GradientProblemSolver::Summary *summary) {
-    double *param_ptr = ParseNumpyData(np_params);
-    py::gil_scoped_release release;
-    ceres::Solve(options, problem, param_ptr, summary);
-  });
+  m.def("Solve",
+        [](const ceres::GradientProblemSolver::Options& options,
+           const ceres::GradientProblem& problem,
+           py::array_t<double>& np_params,
+           ceres::GradientProblemSolver::Summary* summary) {
+          double* param_ptr = ParseNumpyData(np_params);
+          py::gil_scoped_release release;
+          ceres::Solve(options, problem, param_ptr, summary);
+        });
 
   // The main Solve function
   m.def("Solve",
-        overload_cast_<const ceres::Solver::Options &,
-                       ceres::Problem *,
-                       ceres::Solver::Summary *>()(&ceres::Solve),
+        overload_cast_<const ceres::Solver::Options&,
+                       ceres::Problem*,
+                       ceres::Solver::Summary*>()(&ceres::Solve),
         py::call_guard<py::gil_scoped_release>());
 
   py::class_<ceres::CRSMatrix> crs_mat(m, "CRSMatrix");
@@ -1192,60 +1159,67 @@ PYBIND11_MODULE(PyCeres, m) {
   crs_mat.def_readwrite("rows", &ceres::CRSMatrix::rows);
   crs_mat.def_readwrite("values", &ceres::CRSMatrix::values);
 
-  py::class_<ceres::NumericDiffOptions>
-      numdiff_options(m, "NumericDiffOptions");
+  py::class_<ceres::NumericDiffOptions> numdiff_options(m,
+                                                        "NumericDiffOptions");
   numdiff_options.def(py::init<>());
   numdiff_options.def_readwrite("relative_step_size",
                                 &ceres::NumericDiffOptions::relative_step_size);
-  numdiff_options.def_readwrite("ridders_relative_initial_step_size",
-                                &ceres::NumericDiffOptions::ridders_relative_initial_step_size);
-  numdiff_options.def_readwrite("max_num_ridders_extrapolations",
-                                &ceres::NumericDiffOptions::max_num_ridders_extrapolations);
+  numdiff_options.def_readwrite(
+      "ridders_relative_initial_step_size",
+      &ceres::NumericDiffOptions::ridders_relative_initial_step_size);
+  numdiff_options.def_readwrite(
+      "max_num_ridders_extrapolations",
+      &ceres::NumericDiffOptions::max_num_ridders_extrapolations);
   numdiff_options.def_readwrite("ridders_epsilon",
                                 &ceres::NumericDiffOptions::ridders_epsilon);
-  numdiff_options.def_readwrite("ridders_step_shrink_factor",
-                                &ceres::NumericDiffOptions::ridders_step_shrink_factor);
+  numdiff_options.def_readwrite(
+      "ridders_step_shrink_factor",
+      &ceres::NumericDiffOptions::ridders_step_shrink_factor);
 
-  py::class_<ceres::GradientChecker::ProbeResults>
-      probe_results(m, "ProbeResults");
+  py::class_<ceres::GradientChecker::ProbeResults> probe_results(
+      m, "ProbeResults");
   probe_results.def(py::init<>());
-  probe_results.def_readwrite("return_value",
-                              &ceres::GradientChecker::ProbeResults::return_value);
+  probe_results.def_readwrite(
+      "return_value", &ceres::GradientChecker::ProbeResults::return_value);
   probe_results.def_readwrite("residuals",
                               &ceres::GradientChecker::ProbeResults::residuals);
   probe_results.def_readwrite("jacobians",
                               &ceres::GradientChecker::ProbeResults::jacobians);
-  probe_results.def_readwrite("local_jacobians",
-                              &ceres::GradientChecker::ProbeResults::local_jacobians);
-  probe_results.def_readwrite("numeric_jacobians",
-                              &ceres::GradientChecker::ProbeResults::numeric_jacobians);
-  probe_results.def_readwrite("local_numeric_jacobians",
-                              &ceres::GradientChecker::ProbeResults::local_numeric_jacobians);
-  probe_results.def_readwrite("maximum_relative_error",
-                              &ceres::GradientChecker::ProbeResults::maximum_relative_error);
+  probe_results.def_readwrite(
+      "local_jacobians",
+      &ceres::GradientChecker::ProbeResults::local_jacobians);
+  probe_results.def_readwrite(
+      "numeric_jacobians",
+      &ceres::GradientChecker::ProbeResults::numeric_jacobians);
+  probe_results.def_readwrite(
+      "local_numeric_jacobians",
+      &ceres::GradientChecker::ProbeResults::local_numeric_jacobians);
+  probe_results.def_readwrite(
+      "maximum_relative_error",
+      &ceres::GradientChecker::ProbeResults::maximum_relative_error);
   probe_results.def_readwrite("error_log",
                               &ceres::GradientChecker::ProbeResults::error_log);
 
   py::class_<ceres::GradientChecker> gradient_checker(m, "GradientChecker");
-  gradient_checker.def(py::init<const ceres::CostFunction *,
-                                const std::vector<const ceres::LocalParameterization *> *,
-                                const ceres::NumericDiffOptions>());
-  gradient_checker.def("Probe",
-                       [](ceres::GradientChecker &myself,
-                          std::vector<py::array_t<double>> &parameters,
-                          double relative_precision,
-                          ceres::GradientChecker::ProbeResults *results) {
-                         std::vector<double *> param_pointers;
-                         for (auto &p:parameters) {
-                           param_pointers.push_back(ParseNumpyData(p));
-                         }
-                         return myself.Probe(param_pointers.data(),
-                                             relative_precision,
-                                             results);
-                       });
+  gradient_checker.def(
+      py::init<const ceres::CostFunction*,
+               const std::vector<const ceres::LocalParameterization*>*,
+               const ceres::NumericDiffOptions>());
+  gradient_checker.def(
+      "Probe",
+      [](ceres::GradientChecker& myself,
+         std::vector<py::array_t<double>>& parameters,
+         double relative_precision,
+         ceres::GradientChecker::ProbeResults* results) {
+        std::vector<double*> param_pointers;
+        for (auto& p : parameters) {
+          param_pointers.push_back(ParseNumpyData(p));
+        }
+        return myself.Probe(param_pointers.data(), relative_precision, results);
+      });
 
   py::class_<ceres::NormalPrior> normal_prior(m, "NormalPrior");
-  normal_prior.def(py::init<const ceres::Matrix &, const ceres::Vector &>());
+  normal_prior.def(py::init<const ceres::Matrix&, const ceres::Vector&>());
 
   py::class_<ceres::Context>(m, "Context")
       .def(py::init<>())
@@ -1263,20 +1237,21 @@ PYBIND11_MODULE(PyCeres, m) {
   cov_opt.def_readwrite("apply_loss_function", &c_opt::apply_loss_function);
 
   py::class_<ceres::Covariance> cov(m, "Covariance");
-  cov.def(py::init<const ceres::Covariance::Options &>());
-//  cov.def("Compute",overload_cast_<const std::vector<std::pair<const double*, const double*>>&,
-//  ceres::Problem*>()(&ceres::Covariance::Compute));
-//  cov.def("Compute",overload_cast_<const std::vector<const double*>&,
-//                                   ceres::Problem*>()(&ceres::Covariance::Compute));
+  cov.def(py::init<const ceres::Covariance::Options&>());
+  //  cov.def("Compute",overload_cast_<const std::vector<std::pair<const
+  //  double*, const double*>>&,
+  //  ceres::Problem*>()(&ceres::Covariance::Compute));
+  //  cov.def("Compute",overload_cast_<const std::vector<const double*>&,
+  //                                   ceres::Problem*>()(&ceres::Covariance::Compute));
 
-  py::class_<ceres::ConditionedCostFunction>
-      cond_cost(m, "ConditionedCostFunction");
-  cond_cost.def(py::init([](ceres::CostFunction *wrapped_cost_function,
-                            const std::vector<ceres::CostFunction *> &conditioners) {
-    return new ceres::ConditionedCostFunction(wrapped_cost_function,
-                                              conditioners,
-                                              ceres::DO_NOT_TAKE_OWNERSHIP);
-  }));
+  py::class_<ceres::ConditionedCostFunction> cond_cost(
+      m, "ConditionedCostFunction");
+  cond_cost.def(
+      py::init([](ceres::CostFunction* wrapped_cost_function,
+                  const std::vector<ceres::CostFunction*>& conditioners) {
+        return new ceres::ConditionedCostFunction(
+            wrapped_cost_function, conditioners, ceres::DO_NOT_TAKE_OWNERSHIP);
+      }));
 
   add_pybinded_ceres_examples(m);
   add_custom_cost_functions(m);
@@ -1290,8 +1265,7 @@ PYBIND11_MODULE(PyCeres, m) {
   // Things below this line are wrapped ,but are rarely used even in C++ ceres.
   // and thus are not tested.
 
-//  py::class_<ceres::ScaledLoss>(m, "ScaledLoss")
-//      .def(py::init<ceres::LossFunction *, double, ceres::Ownership>(),
-//           py::arg("ownership") = ceres::Ownership::DO_NOT_TAKE_OWNERSHIP);
-
+  //  py::class_<ceres::ScaledLoss>(m, "ScaledLoss")
+  //      .def(py::init<ceres::LossFunction *, double, ceres::Ownership>(),
+  //           py::arg("ownership") = ceres::Ownership::DO_NOT_TAKE_OWNERSHIP);
 }

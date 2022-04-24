@@ -28,26 +28,26 @@
 //
 // Author: keir@google.com (Keir Mierle)
 
+#include <ceres/ceres.h>
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
-#include <ceres/ceres.h>
+
 #include "ceres/ceres.h"
 #include "ceres/rotation.h"
 
 namespace py = pybind11;
 
 struct HelloWorldCostFunctor {
-  template<typename T>
-  bool operator()(const T *const x, T *residual) const {
+  template <typename T>
+  bool operator()(const T* const x, T* residual) const {
     residual[0] = T(10.0) - x[0];
     return true;
   }
 };
 
-ceres::CostFunction *CreateHelloWorldCostFunction() {
-  return new ceres::AutoDiffCostFunction<HelloWorldCostFunctor,
-                                         1,
-                                         1>(new HelloWorldCostFunctor);
+ceres::CostFunction* CreateHelloWorldCostFunction() {
+  return new ceres::AutoDiffCostFunction<HelloWorldCostFunctor, 1, 1>(
+      new HelloWorldCostFunctor);
 }
 
 // Read a Bundle Adjustment in the Large dataset.
@@ -60,17 +60,17 @@ class BALProblem {
     delete[] parameters_;
   }
   int num_observations() const { return num_observations_; }
-  const double *observations() const { return observations_; }
-  double *mutable_cameras() { return parameters_; }
-  double *mutable_points() { return parameters_ + 9 * num_cameras_; }
-  double *mutable_camera_for_observation(int i) {
+  const double* observations() const { return observations_; }
+  double* mutable_cameras() { return parameters_; }
+  double* mutable_points() { return parameters_ + 9 * num_cameras_; }
+  double* mutable_camera_for_observation(int i) {
     return mutable_cameras() + camera_index_[i] * 9;
   }
-  double *mutable_point_for_observation(int i) {
+  double* mutable_point_for_observation(int i) {
     return mutable_points() + point_index_[i] * 3;
   }
-  bool LoadFile(const char *filename) {
-    FILE *fptr = fopen(filename, "r");
+  bool LoadFile(const char* filename) {
+    FILE* fptr = fopen(filename, "r");
     if (fptr == NULL) {
       return false;
     };
@@ -95,8 +95,8 @@ class BALProblem {
     return true;
   }
 
-  template<typename T>
-  void FscanfOrDie(FILE *fptr, const char *format, T *value) {
+  template <typename T>
+  void FscanfOrDie(FILE* fptr, const char* format, T* value) {
     int num_scanned = fscanf(fptr, format, value);
     if (num_scanned != 1) {
       LOG(FATAL) << "Invalid UW data file.";
@@ -106,10 +106,10 @@ class BALProblem {
   int num_points_;
   int num_observations_;
   int num_parameters_;
-  int *point_index_;
-  int *camera_index_;
-  double *observations_;
-  double *parameters_;
+  int* point_index_;
+  int* camera_index_;
+  double* observations_;
+  double* parameters_;
 };
 
 // Templated pinhole camera model for used with Ceres.  The camera is
@@ -119,10 +119,10 @@ class BALProblem {
 struct SnavelyReprojectionError {
   SnavelyReprojectionError(double observed_x, double observed_y)
       : observed_x(observed_x), observed_y(observed_y) {}
-  template<typename T>
-  bool operator()(const T *const camera,
-                  const T *const point,
-                  T *residuals) const {
+  template <typename T>
+  bool operator()(const T* const camera,
+                  const T* const point,
+                  T* residuals) const {
     // camera[0,1,2] are the angle-axis rotation.
     T p[3];
     ceres::AngleAxisRotatePoint(camera, point, p);
@@ -136,12 +136,12 @@ struct SnavelyReprojectionError {
     T xp = -p[0] / p[2];
     T yp = -p[1] / p[2];
     // Apply second and fourth order radial distortion.
-    const T &l1 = camera[7];
-    const T &l2 = camera[8];
+    const T& l1 = camera[7];
+    const T& l2 = camera[8];
     T r2 = xp * xp + yp * yp;
     T distortion = 1.0 + r2 * (l1 + l2 * r2);
     // Compute final projected point position.
-    const T &focal = camera[6];
+    const T& focal = camera[6];
     T predicted_x = focal * distortion * xp;
     T predicted_y = focal * distortion * yp;
     // The error is the difference between the predicted and observed position.
@@ -151,7 +151,7 @@ struct SnavelyReprojectionError {
   }
   // Factory to hide the construction of the CostFunction object from
   // the client code.
-  static ceres::CostFunction *Create(const double observed_x,
+  static ceres::CostFunction* Create(const double observed_x,
                                      const double observed_y) {
     return (new ceres::AutoDiffCostFunction<SnavelyReprojectionError, 2, 9, 3>(
         new SnavelyReprojectionError(observed_x, observed_y)));
@@ -160,13 +160,12 @@ struct SnavelyReprojectionError {
   double observed_y;
 };
 
-void SolveBALProblemWithCPP(BALProblem *bal_problem) {
-  const double *observations = bal_problem->observations();
+void SolveBALProblemWithCPP(BALProblem* bal_problem) {
+  const double* observations = bal_problem->observations();
   ceres::Problem problem;
   for (int i = 0; i < bal_problem->num_observations(); ++i) {
-    ceres::CostFunction *cost_function =
-        SnavelyReprojectionError::Create(observations[2 * i + 0],
-                                         observations[2 * i + 1]);
+    ceres::CostFunction* cost_function = SnavelyReprojectionError::Create(
+        observations[2 * i + 0], observations[2 * i + 1]);
     problem.AddResidualBlock(cost_function,
                              NULL /* squared loss */,
                              bal_problem->mutable_camera_for_observation(i),
@@ -179,8 +178,7 @@ void SolveBALProblemWithCPP(BALProblem *bal_problem) {
   ceres::Solve(options, &problem, &summary);
 }
 
-void add_pybinded_ceres_examples(py::module &m) {
-
+void add_pybinded_ceres_examples(py::module& m) {
   m.def("CreateHelloWorldCostFunction", &CreateHelloWorldCostFunction);
 
   py::class_<BALProblem> bal(m, "BALProblem");
@@ -188,7 +186,7 @@ void add_pybinded_ceres_examples(py::module &m) {
   bal.def("num_observations", &BALProblem::num_observations);
   bal.def("LoadFile", &BALProblem::LoadFile);
 
-  bal.def("observations", [](BALProblem &myself) {
+  bal.def("observations", [](BALProblem& myself) {
     std::vector<double> double_data;
     for (int idx = 0; idx < myself.num_observations(); ++idx) {
       double_data.push_back(myself.observations()[2 * idx + 0]);
@@ -196,7 +194,7 @@ void add_pybinded_ceres_examples(py::module &m) {
     }
     return double_data;
   });
-  bal.def("cameras", [](BALProblem &myself) {
+  bal.def("cameras", [](BALProblem& myself) {
     std::vector<double> double_data;
     for (int idx = 0; idx < myself.num_cameras_; ++idx) {
       double_data.push_back(myself.mutable_cameras()[9 * idx + 0]);
@@ -211,7 +209,7 @@ void add_pybinded_ceres_examples(py::module &m) {
     }
     return double_data;
   });
-  bal.def("points", [](BALProblem &myself) {
+  bal.def("points", [](BALProblem& myself) {
     std::vector<double> double_data;
     for (int idx = 0; idx < myself.num_points_; ++idx) {
       double_data.push_back(myself.mutable_points()[3 * idx + 0]);
@@ -220,30 +218,28 @@ void add_pybinded_ceres_examples(py::module &m) {
     }
     return double_data;
   });
-  bal.def("mutable_cameras_for_observation", [](BALProblem &myself, int i) {
+  bal.def("mutable_cameras_for_observation", [](BALProblem& myself, int i) {
     std::vector<double> double_data;
-    double *ptr = myself.mutable_cameras() + myself.camera_index_[i] * 9;
+    double* ptr = myself.mutable_cameras() + myself.camera_index_[i] * 9;
     for (int idx = 0; idx < 9; ++idx) {
       double_data.push_back(ptr[idx]);
     }
     return double_data;
   });
-  bal.def("mutable_point_for_observation", [](BALProblem &myself, int i) {
+  bal.def("mutable_point_for_observation", [](BALProblem& myself, int i) {
     std::vector<double> double_data;
-    double *ptr = myself.mutable_points() + myself.point_index_[i] * 3;
+    double* ptr = myself.mutable_points() + myself.point_index_[i] * 3;
     for (int idx = 0; idx < 3; ++idx) {
       double_data.push_back(ptr[idx]);
     }
     return double_data;
   });
 
-  bal.def("camera_index", [](BALProblem &myself, int i) {
-    return myself.camera_index_[i];
-  });
+  bal.def("camera_index",
+          [](BALProblem& myself, int i) { return myself.camera_index_[i]; });
 
-  bal.def("point_index", [](BALProblem &myself, int i) {
-    return myself.point_index_[i];
-  });
+  bal.def("point_index",
+          [](BALProblem& myself, int i) { return myself.point_index_[i]; });
 
   m.def("CreateSnavelyCostFunction", &SnavelyReprojectionError::Create);
   m.def("SolveBALProblemWithCPP", &SolveBALProblemWithCPP);
