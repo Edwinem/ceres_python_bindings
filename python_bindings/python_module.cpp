@@ -1082,18 +1082,21 @@ PYBIND11_MODULE(PyCeres, m) {
       .def("GlobalSize", &ceres::LocalParameterization::GlobalSize)
       .def("LocalSize", &ceres::LocalParameterization::LocalSize);
 
-  py::class_<ceres::IdentityParameterization>(m, "IdentityParameterization")
-      .def(py::init<int>());
-  py::class_<ceres::QuaternionParameterization>(m, "QuaternionParameterization")
-      .def(py::init<>());
-  py::class_<ceres::HomogeneousVectorParameterization>(m,
-                                                       "HomogeneousVectorParameterization")
-      .def(py::init<int>());
-  py::class_<ceres::EigenQuaternionParameterization>(m,
-                                                     "EigenQuaternionParameterization")
-      .def(py::init<>());
-  py::class_<ceres::SubsetParameterization>(m, "SubsetParameterization")
-      .def(py::init<int, const std::vector<int> &>());
+  py::class_<ceres::IdentityParameterization, ceres::LocalParameterization>(m,
+  "IdentityParameterization")
+    .def (py::init<int>());
+  py::class_<ceres::QuaternionParameterization, ceres::LocalParameterization>(m,
+  "QuaternionParameterization")
+    .def (py::init<>());
+  py::class_<ceres::HomogeneousVectorParameterization, ceres::LocalParameterization>(m,
+  "HomogeneousVectorParameterization")
+    .def (py::init<int>());
+  py::class_<ceres::EigenQuaternionParameterization, ceres::LocalParameterization>(m,
+  "EigenQuaternionParameterization")
+    .def (py::init<>());
+  py::class_<ceres::SubsetParameterization, ceres::LocalParameterization>(m,
+  "SubsetParameterization")
+    .def (py::init<int, const std::vector<int>&>());
 
   py::class_<ceres::GradientProblem> grad_problem(m, "GradientProblem");
   grad_problem.def(py::init([](ceres::FirstOrderFunction *func) {
