@@ -471,7 +471,6 @@ PYBIND11_MODULE(PyCeres, m) {
       m, "SparseLinearAlgebraLibraryType")
       .value("SUITE_SPARSE",
              ceres::SparseLinearAlgebraLibraryType::SUITE_SPARSE)
-      .value("CX_SPARSE", ceres::SparseLinearAlgebraLibraryType::CX_SPARSE)
       .value("EIGEN_SPARSE",
              ceres::SparseLinearAlgebraLibraryType::EIGEN_SPARSE)
       .value("ACCELERATE_SPARSE",
@@ -817,8 +816,6 @@ PYBIND11_MODULE(PyCeres, m) {
                                &s_options::sparse_linear_algebra_library_type);
   solver_options.def_readwrite("use_explicit_schur_complement",
                                &s_options::use_explicit_schur_complement);
-  solver_options.def_readwrite("use_postordering",
-                               &s_options::use_postordering);
   solver_options.def_readwrite("dynamic_sparsity",
                                &s_options::dynamic_sparsity);
   solver_options.def_readwrite("use_mixed_precision_solves",
